@@ -2,6 +2,7 @@
   "expo": {
     "name": "Spot Mates",
     "slug": "spotmates",
+    "owner": "spot-mates",
     "scheme": "spotmates",
     "version": "1.0.0",
     "orientation": "portrait",
