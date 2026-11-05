@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Spot Mates",
-    "slug": "spot-mates",
+    "slug": "spotmates",
     "scheme": "spotmates",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,7 +16,9 @@
     },
     "android": {
       "package": "com.spotmates.app",
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -32,6 +34,17 @@
     ],
     "experiments": {
       "typedRoutes": false
+    },
+    "extra": {
+      "eas": {
+        "projectId": "9f098f63-23fd-462a-9535-a68a55d72d85"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9f098f63-23fd-462a-9535-a68a55d72d85"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }
