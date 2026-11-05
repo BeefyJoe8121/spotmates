@@ -65,6 +65,16 @@ export function PostCard({ post }: { post: Post }) {
               </View>
             ))}
           </View>
+          {post.foods?.length ? (
+            <View style={{ gap: 6 }}>
+              {post.foods.map((x, i) => (
+                <View key={i} style={{ flexDirection: 'row', gap: 10, alignItems: 'baseline' }}>
+                  <T size={14} style={{ flex: 1 }} numberOfLines={1}>{x.name}<T muted size={12}>  {x.serving}{x.qty !== 1 ? ` × ${x.qty}` : ''}</T></T>
+                  <T mono muted size={13}>{x.kcal} cal</T>
+                </View>
+              ))}
+            </View>
+          ) : null}
           {post.notes ? <T>{post.notes}</T> : null}
           {actions}
         </View>

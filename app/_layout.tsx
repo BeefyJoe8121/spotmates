@@ -42,6 +42,7 @@ function Gate() {
       <Stack screenOptions={{ headerStyle: { backgroundColor: c.surface }, headerTintColor: c.ink, headerTitleStyle: { fontFamily: F.display, fontSize: 22 }, contentStyle: { backgroundColor: c.bg } }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="log" options={{ presentation: 'modal', title: 'Log it' }} />
+        <Stack.Screen name="food" options={{ presentation: 'modal', title: 'Add food' }} />
       </Stack>
     </>
   );

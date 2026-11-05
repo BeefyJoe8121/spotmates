@@ -41,6 +41,7 @@ create table public.posts (
   -- workouts
   wtype text, minutes int,
   exercises jsonb not null default '[]'::jsonb,
+  foods jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
 );
 alter table public.posts enable row level security;

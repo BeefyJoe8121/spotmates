@@ -1,6 +1,7 @@
 import { decode } from 'base64-arraybuffer';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import type { FoodItem } from './foods';
 import { supabase } from './supabase';
 import { addDays, ageMs, POST_TTL_MS, today, uuid } from './util';
 
@@ -10,6 +11,8 @@ export type Post = {
   title: string | null; notes: string | null; photo_path: string | null;
   meal_type: string | null; place: string | null; kcal: number | null; protein: number | null; carbs: number | null; fat: number | null;
   wtype: string | null; minutes: number | null; exercises: Exercise[]; created_at: string;
+  /** Foods in a meal, MyFitnessPal style (empty for older posts and workouts) */
+  foods?: FoodItem[];
 };
 export type Profile = {
   id: string; display_name: string | null; crew_id: string | null;
@@ -170,8 +173,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const { error } = await supabase.storage.from('photos').upload(photo_path, decode(photoBase64), { contentType: 'image/jpeg' });
         if (error) return `The photo didn't upload: ${errMsg(error)}`;
       }
-      const { error } = await supabase.from('posts').insert({ ...p, author: uid, crew_id: crew.id, photo_path });
-      if (error) { if (photo_path) supabase.storage.from('photos').remove([photo_path]); return errMsg(error); }
+      const row: any = { ...p, author: uid, crew_id: crew.id, photo_path };
+      if (!row.foods?.length) delete row.foods; // older databases may not have the foods column yet
+      const { error } = await supabase.from('posts').insert(row);
+      if (error) {
+        if (photo_path) supabase.storage.from('photos').remove([photo_path]);
+        if (/foods/.test(error.message ?? '')) return 'Food logging needs a one-time database update. Ask Declan to run the foods update in Supabase.';
+        return errMsg(error);
+      }
       await loadFeed(crew.id);
       return null;
     },

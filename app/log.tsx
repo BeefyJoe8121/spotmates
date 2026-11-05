@@ -1,10 +1,11 @@
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Btn, Chip, Field, Label, Seg, T } from '@/components/ui';
 import { Exercise, useData } from '@/lib/data';
+import { FoodItem, foodBus } from '@/lib/foods';
 import { useTheme } from '@/lib/theme';
 import { addDays, macroKcal, num, today } from '@/lib/util';
 
@@ -19,14 +20,16 @@ function guessMeal(): (typeof MEAL_TYPES)[number] {
 
 export default function LogScreen() {
   const c = useTheme();
-  const params = useLocalSearchParams<{ kind?: string }>();
+  const params = useLocalSearchParams<{ kind?: string; meal?: string; search?: string }>();
   const { addPost } = useData();
   const [kind, setKind] = useState<'meal' | 'workout'>(params.kind === 'workout' ? 'workout' : 'meal');
   const [photo, setPhoto] = useState<{ uri: string; base64: string } | null>(null);
   const [title, setTitle] = useState('');
   const [dayOff, setDayOff] = useState(0);
   const [notes, setNotes] = useState('');
-  const [mealType, setMealType] = useState<(typeof MEAL_TYPES)[number]>(guessMeal());
+  const [mealType, setMealType] = useState<(typeof MEAL_TYPES)[number]>((MEAL_TYPES as readonly string[]).includes(params.meal ?? '') ? (params.meal as (typeof MEAL_TYPES)[number]) : guessMeal());
+  const [foods, setFoods] = useState<FoodItem[]>([]);
+  const titleTouched = useRef(false);
   const [place, setPlace] = useState('');
   const [p, setP] = useState(''); const [cb, setCb] = useState(''); const [f, setF] = useState(''); const [k, setK] = useState('');
   const [wtype, setWtype] = useState('Strength');
@@ -35,6 +38,22 @@ export default function LogScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const meal = kind === 'meal';
+
+  // Opened from the diary's "+ Add food": jump straight to food search
+  const searched = useRef(false);
+  useEffect(() => {
+    if (params.search === '1' && !searched.current) { searched.current = true; setTimeout(() => router.push('/food'), 350); }
+  }, [params.search]);
+  // Foods picked on the search screen land here
+  useEffect(() => foodBus.listen((item) => setFoods((cur) => [...cur, item])), []);
+  // Totals fill the macro boxes, MyFitnessPal style
+  useEffect(() => {
+    if (!foods.length) return;
+    const sum = (k: 'kcal' | 'protein' | 'carbs' | 'fat') => foods.reduce((a, x) => a + (x[k] || 0), 0);
+    const r = (n: number) => String(Math.round(n * 10) / 10);
+    setP(r(sum('protein'))); setCb(r(sum('carbs'))); setF(r(sum('fat'))); setK(String(Math.round(sum('kcal'))));
+    if (!titleTouched.current) setTitle(foods.map((x) => x.name).join(', ').slice(0, 80));
+  }, [foods]);
 
   const kcalHint = useMemo(() => {
     const mk = macroKcal(num(p), num(cb), num(f));
@@ -68,9 +87,9 @@ export default function LogScreen() {
     setErr(null);
     const day = addDays(today(), -dayOff);
     if (meal) {
-      if (!title.trim() && !photo) return setErr('Add a photo or say what you ate.');
+      if (!title.trim() && !photo && !foods.length) return setErr('Add a food, a photo, or say what you ate.');
       const post = { kind, day, title: title.trim() || null, notes: notes.trim() || null, meal_type: mealType, place: place.trim() || null,
-        protein: num(p), carbs: num(cb), fat: num(f), kcal: num(k) != null ? Math.round(num(k)!) : null };
+        protein: num(p), carbs: num(cb), fat: num(f), kcal: num(k) != null ? Math.round(num(k)!) : null, foods };
       setBusy(photo ? 'Uploading photo…' : 'Posting…');
       const e = await addPost(post, photo?.base64);
       setBusy(null);
@@ -110,7 +129,7 @@ export default function LogScreen() {
           </View>
         )}
 
-        <Field label={meal ? 'What did you eat?' : 'Workout name'} value={title} onChangeText={setTitle} placeholder={meal ? 'Chicken rice bowl' : 'Push day'} maxLength={80} />
+        <Field label={meal ? 'What did you eat?' : 'Workout name'} value={title} onChangeText={(t) => { titleTouched.current = true; setTitle(t); }} placeholder={meal ? 'Chicken rice bowl' : 'Push day'} maxLength={80} />
         <View style={{ gap: 6 }}>
           <Label>When</Label>
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -130,8 +149,29 @@ export default function LogScreen() {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {PLACES.map((pl) => <Chip key={pl} title={pl} on={place === pl} onPress={() => setPlace(pl)} />)}
             </View>
+            <View style={{ gap: 8 }}>
+              <Label>Foods</Label>
+              {foods.length ? (
+                <View style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, overflow: 'hidden' }}>
+                  {foods.map((x, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: i ? 1 : 0, borderTopColor: c.line }}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <T bold size={14} numberOfLines={1}>{x.name}</T>
+                        <T muted size={12} numberOfLines={1}>{[x.brand, `${x.serving}${x.qty !== 1 ? ` × ${x.qty}` : ''}`].filter(Boolean).join(', ')}</T>
+                        <T mono muted size={11}>P {x.protein}g · C {x.carbs}g · F {x.fat}g</T>
+                      </View>
+                      <T mono bold size={14}>{x.kcal}</T>
+                      <Pressable onPress={() => setFoods((cur) => cur.filter((_, j) => j !== i))} accessibilityLabel={`Remove ${x.name}`} style={{ padding: 4 }}>
+                        <T muted size={18}>×</T>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              ) : <T muted size={13}>Search a food database and pick serving sizes, like MyFitnessPal. Or just type the macros below.</T>}
+              <Btn small kind="primary" title="+ Add food" onPress={() => router.push('/food')} style={{ alignSelf: 'flex-start' }} />
+            </View>
             <View style={{ gap: 6 }}>
-              <Label>Macros</Label>
+              <Label>Macros{foods.length ? ' (totals from your foods)' : ''}</Label>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Field label="Protein (g)" value={p} onChangeText={setP} keyboardType="decimal-pad" />
                 <Field label="Carbs (g)" value={cb} onChangeText={setCb} keyboardType="decimal-pad" />
