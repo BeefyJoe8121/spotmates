@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Spot Mates",
+    "slug": "spot-mates",
+    "scheme": "spotmates",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.spotmates.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Spot Mates uses your camera so you can snap your meals and workouts.",
+        "NSPhotoLibraryUsageDescription": "Spot Mates lets you pick meal and workout photos from your library."
+      }
+    },
+    "android": {
+      "package": "com.spotmates.app",
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Spot Mates lets you pick meal and workout photos from your library.",
+          "cameraPermission": "Spot Mates uses your camera so you can snap your meals and workouts."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
