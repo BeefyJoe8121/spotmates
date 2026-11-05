@@ -1,7 +1,11 @@
 name: Publish update
 
-# Runs when started from expo.dev or by Claude. Publishes the app to the "preview" branch,
+# Every push to main publishes the app to the "preview" branch,
 # which opens in Expo Go (SDK 54) from the project's Updates page on expo.dev.
+on:
+  push:
+    branches: ['main']
+
 jobs:
   publish:
     name: Publish to Expo Go
