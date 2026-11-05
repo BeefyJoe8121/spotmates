@@ -1,7 +1,7 @@
 name: Publish update
 
 # Every push to main publishes the app to the "preview" branch,
-# which opens in Expo Go (SDK 54) from the project's Updates page on expo.dev.
+# which opens in Expo Go (SDK 58) from the project's Updates page on expo.dev.
 on:
   push:
     branches: ['main']
