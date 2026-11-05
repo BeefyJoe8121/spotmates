@@ -11,7 +11,6 @@ import { addDays, macroKcal, num, today } from '@/lib/util';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'] as const;
 const WTYPES = ['Strength', 'Cardio', 'Sport', 'Mobility', 'Other'];
-const PLACES = ['Rocky Top Dining Hall', 'Stokely Dining Hall', 'Home-cooked', 'Chick-fil-A', 'Chipotle', 'Cook Out', "Raising Cane's", 'Protein shake'];
 
 function guessMeal(): (typeof MEAL_TYPES)[number] {
   const h = new Date().getHours();
@@ -30,7 +29,6 @@ export default function LogScreen() {
   const [mealType, setMealType] = useState<(typeof MEAL_TYPES)[number]>((MEAL_TYPES as readonly string[]).includes(params.meal ?? '') ? (params.meal as (typeof MEAL_TYPES)[number]) : guessMeal());
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const titleTouched = useRef(false);
-  const [place, setPlace] = useState('');
   const [p, setP] = useState(''); const [cb, setCb] = useState(''); const [f, setF] = useState(''); const [k, setK] = useState('');
   const [wtype, setWtype] = useState('Strength');
   const [minutes, setMinutes] = useState('');
@@ -88,7 +86,7 @@ export default function LogScreen() {
     const day = addDays(today(), -dayOff);
     if (meal) {
       if (!title.trim() && !photo && !foods.length) return setErr('Add a food, a photo, or say what you ate.');
-      const post = { kind, day, title: title.trim() || null, notes: notes.trim() || null, meal_type: mealType, place: place.trim() || null,
+      const post = { kind, day, title: title.trim() || null, notes: notes.trim() || null, meal_type: mealType, place: null,
         protein: num(p), carbs: num(cb), fat: num(f), kcal: num(k) != null ? Math.round(num(k)!) : null, foods };
       setBusy(photo ? 'Uploading photo…' : 'Posting…');
       const e = await addPost(post, photo?.base64);
@@ -130,6 +128,28 @@ export default function LogScreen() {
         )}
 
         <Field label={meal ? 'What did you eat?' : 'Workout name'} value={title} onChangeText={(t) => { titleTouched.current = true; setTitle(t); }} placeholder={meal ? 'Chicken rice bowl' : 'Push day'} maxLength={80} />
+        {meal ? (
+        <View style={{ gap: 8 }}>
+          {foods.length ? (
+            <View style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, overflow: 'hidden' }}>
+              {foods.map((x, i) => (
+                <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: i ? 1 : 0, borderTopColor: c.line }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <T bold size={14} numberOfLines={1}>{x.name}</T>
+                    <T muted size={12} numberOfLines={1}>{[x.brand, `${x.serving}${x.qty !== 1 ? ` × ${x.qty}` : ''}`].filter(Boolean).join(', ')}</T>
+                    <T mono muted size={11}>P {x.protein}g · C {x.carbs}g · F {x.fat}g</T>
+                  </View>
+                  <T mono bold size={14}>{x.kcal}</T>
+                  <Pressable onPress={() => setFoods((cur) => cur.filter((_, j) => j !== i))} accessibilityLabel={`Remove ${x.name}`} style={{ padding: 4 }}>
+                    <T muted size={18}>×</T>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : <T muted size={13}>Search a food database and pick serving sizes, like MyFitnessPal. Or just type the macros below.</T>}
+          <Btn small kind="primary" title="+ Add food" onPress={() => router.push('/food')} style={{ alignSelf: 'flex-start' }} />
+        </View>
+        ) : null}
         <View style={{ gap: 6 }}>
           <Label>When</Label>
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -144,31 +164,6 @@ export default function LogScreen() {
               <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
                 {MEAL_TYPES.map((m) => <Chip key={m} title={m} on={mealType === m} onPress={() => setMealType(m)} />)}
               </View>
-            </View>
-            <Field label="Where's it from?" value={place} onChangeText={setPlace} placeholder="Rocky Top, Chick-fil-A, home…" maxLength={60} />
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-              {PLACES.map((pl) => <Chip key={pl} title={pl} on={place === pl} onPress={() => setPlace(pl)} />)}
-            </View>
-            <View style={{ gap: 8 }}>
-              <Label>Foods</Label>
-              {foods.length ? (
-                <View style={{ borderWidth: 1, borderColor: c.line, borderRadius: 12, overflow: 'hidden' }}>
-                  {foods.map((x, i) => (
-                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: i ? 1 : 0, borderTopColor: c.line }}>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <T bold size={14} numberOfLines={1}>{x.name}</T>
-                        <T muted size={12} numberOfLines={1}>{[x.brand, `${x.serving}${x.qty !== 1 ? ` × ${x.qty}` : ''}`].filter(Boolean).join(', ')}</T>
-                        <T mono muted size={11}>P {x.protein}g · C {x.carbs}g · F {x.fat}g</T>
-                      </View>
-                      <T mono bold size={14}>{x.kcal}</T>
-                      <Pressable onPress={() => setFoods((cur) => cur.filter((_, j) => j !== i))} accessibilityLabel={`Remove ${x.name}`} style={{ padding: 4 }}>
-                        <T muted size={18}>×</T>
-                      </Pressable>
-                    </View>
-                  ))}
-                </View>
-              ) : <T muted size={13}>Search a food database and pick serving sizes, like MyFitnessPal. Or just type the macros below.</T>}
-              <Btn small kind="primary" title="+ Add food" onPress={() => router.push('/food')} style={{ alignSelf: 'flex-start' }} />
             </View>
             <View style={{ gap: 6 }}>
               <Label>Macros{foods.length ? ' (totals from your foods)' : ''}</Label>
@@ -209,7 +204,7 @@ export default function LogScreen() {
         )}
 
         <Field label="Notes" value={notes} onChangeText={setNotes} multiline maxLength={600} style={{ minHeight: 70, textAlignVertical: 'top' }}
-          placeholder={meal ? 'Where from, how it fit the plan…' : 'PRs, how it felt, what to push next time…'} />
+          placeholder={meal ? 'How it tasted, how it fit the plan…' : 'PRs, how it felt, what to push next time…'} />
         <T muted size={12}>{meal ? 'Meal posts disappear after 3 days to save space. Their macros still count.' : 'Workout photos disappear after 3 days to save space. The workout stays.'}</T>
         {err ? <T size={13} style={{ color: c.danger }}>{err}</T> : null}
         <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end' }}>
