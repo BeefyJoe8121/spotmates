@@ -17,22 +17,20 @@ Coming next: PRs, Progress (calendar, streaks, goal weight), color schemes, AI m
 
 ## One-time setup
 
-### 1. Supabase
-1. Create a project at supabase.com.
-2. Open **SQL Editor → New query**, paste all of `supabase/schema.sql`, and press **Run**.
-3. For easy testing: **Authentication → Sign In / Providers → Email**, turn off **Confirm email** (otherwise new accounts must click an email link first).
-4. Copy **Project URL** and the **anon public** key from **Project Settings → API**.
+Run these in this project folder on your computer:
 
-### 2. App
 ```bash
-cp .env.example .env      # paste the two Supabase values in
-npm run setup             # installs everything at versions matching the Expo SDK
-npx expo start            # scan the QR code with Expo Go
+npm install -g eas-cli
+eas login
+eas init                                  # links this folder to your Expo project
+eas integrations:supabase:connect         # creates a Supabase project (or add --link <project-ref> to use one you made)
+npm run setup                             # installs everything at versions matching the Expo SDK
 ```
 
-### 3. Expo builds
-```bash
-npx eas-cli init          # links this folder to your Expo project
-npx eas-cli build --profile preview --platform all
-```
-Add `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` as environment variables on your Expo project (expo.dev → project → Environment variables) so cloud builds get them.
+`connect` saves the Supabase URL and publishable key to `.env.local` and to your Expo project, so cloud builds get them too.
+
+Then in Supabase (`eas integrations:supabase:dashboard` opens it):
+1. **SQL Editor → New query**, paste all of `supabase/schema.sql`, press **Run**.
+2. **Authentication → Sign In / Providers → Email**, turn off **Confirm email** so friends can sign up without an email link.
+
+Start the app with `npx expo start` and scan the QR code with Expo Go.

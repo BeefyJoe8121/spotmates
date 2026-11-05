@@ -37,7 +37,7 @@ function Gate() {
     return (
       <View style={{ flex: 1, backgroundColor: c.bg, padding: 24, justifyContent: 'center', gap: 8 }}>
         <T bold size={18}>Spot Mates isn't connected yet</T>
-        <T muted>Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to the .env file, then restart.</T>
+        <T muted>Run `eas integrations:supabase:connect` in the project folder, then restart the app.</T>
       </View>
     );
   }

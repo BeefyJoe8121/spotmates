@@ -147,6 +147,17 @@ create policy "delete my comments" on public.comments for delete using (author =
 
 create policy "my water" on public.water for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+-- ============ Table access ============
+-- Policies above decide which rows; these grants let signed-in users reach the tables at all
+grant usage on schema public to authenticated;
+grant select on public.crews to authenticated;
+grant select, update on public.profiles to authenticated;
+grant select, insert, update, delete on public.posts to authenticated;
+grant select, insert, delete on public.props to authenticated;
+grant select, insert, delete on public.comments to authenticated;
+grant select, insert, update, delete on public.water to authenticated;
+grant execute on function public.create_crew(text), public.join_crew(text), public.my_crew() to authenticated;
+
 -- ============ Live updates ============
 alter publication supabase_realtime add table public.posts, public.props, public.comments;
 
