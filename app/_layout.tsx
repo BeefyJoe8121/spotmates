@@ -1,7 +1,3 @@
-import { BigShouldersDisplay_800ExtraBold, BigShouldersDisplay_900Black } from '@expo-google-fonts/big-shoulders-display';
-import { InstrumentSans_400Regular, InstrumentSans_600SemiBold, InstrumentSans_700Bold } from '@expo-google-fonts/instrument-sans';
-import { JetBrainsMono_400Regular, JetBrainsMono_600SemiBold } from '@expo-google-fonts/jetbrains-mono';
-import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React from 'react';
@@ -15,12 +11,6 @@ import { supabaseConfigured } from '@/lib/supabase';
 import { F, useTheme } from '@/lib/theme';
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    BigShouldersDisplay_800ExtraBold, BigShouldersDisplay_900Black,
-    InstrumentSans_400Regular, InstrumentSans_600SemiBold, InstrumentSans_700Bold,
-    JetBrainsMono_400Regular, JetBrainsMono_600SemiBold,
-  });
-  if (!fontsLoaded && !fontError) return null;
   return (
     <SafeAreaProvider>
       <DataProvider>
