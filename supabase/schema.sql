@@ -1,5 +1,5 @@
 -- Spot Mates database setup.
--- Paste this whole file into Supabase → SQL Editor → New query, then press Run. Safe to run once on a new project.
+-- Paste into Supabase → SQL Editor → New query and press Run (or run it in two parts: tables, then the rest).
 
 -- ============ Tables ============
 
@@ -10,6 +10,7 @@ create table public.crews (
   created_by uuid references auth.users on delete set null,
   created_at timestamptz not null default now()
 );
+alter table public.crews enable row level security;
 
 create table public.profiles (
   id uuid primary key references auth.users on delete cascade,
@@ -23,6 +24,7 @@ create table public.profiles (
   workout_goal int not null default 4,
   created_at timestamptz not null default now()
 );
+alter table public.profiles enable row level security;
 
 create table public.posts (
   id uuid primary key default gen_random_uuid(),
@@ -41,6 +43,7 @@ create table public.posts (
   exercises jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
 );
+alter table public.posts enable row level security;
 create index posts_crew_day on public.posts (crew_id, day desc);
 create index posts_author_day on public.posts (author, day desc);
 
@@ -50,6 +53,7 @@ create table public.props (
   created_at timestamptz not null default now(),
   primary key (post_id, user_id)
 );
+alter table public.props enable row level security;
 
 create table public.comments (
   id uuid primary key default gen_random_uuid(),
@@ -58,6 +62,7 @@ create table public.comments (
   body text not null check (char_length(body) between 1 and 300),
   created_at timestamptz not null default now()
 );
+alter table public.comments enable row level security;
 create index comments_post on public.comments (post_id, created_at);
 
 create table public.water (
@@ -67,28 +72,29 @@ create table public.water (
   entries jsonb not null default '[]'::jsonb,
   primary key (user_id, day)
 );
+alter table public.water enable row level security;
 
 -- ============ Helpers ============
 
 -- The signed-in person's crew (security definer so policies can use it without recursion)
 create or replace function public.my_crew() returns uuid
-language sql stable security definer set search_path = public as $$
-  select crew_id from public.profiles where id = auth.uid()
-$$;
+as $$ select crew_id from public.profiles where id = auth.uid() $$
+language sql stable security definer set search_path to public;
 
 -- Make a profile row for every new account
 create or replace function public.handle_new_user() returns trigger
-language plpgsql security definer set search_path = public as $$
+as $$
 begin
   insert into public.profiles (id) values (new.id) on conflict do nothing;
   return new;
-end $$;
+end
+$$ language plpgsql security definer set search_path to public;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
 
 -- Start a crew and join it; returns the crew with its invite code
 create or replace function public.create_crew(crew_name text) returns public.crews
-language plpgsql security definer set search_path = public as $$
+as $$
 declare c public.crews; new_code text;
 begin
   if auth.uid() is null then raise exception 'Sign in first'; end if;
@@ -99,11 +105,12 @@ begin
   insert into public.crews (name, code, created_by) values (left(trim(crew_name), 40), new_code, auth.uid()) returning * into c;
   update public.profiles set crew_id = c.id where id = auth.uid();
   return c;
-end $$;
+end
+$$ language plpgsql security definer set search_path to public;
 
 -- Join a crew with its invite code
 create or replace function public.join_crew(crew_code text) returns public.crews
-language plpgsql security definer set search_path = public as $$
+as $$
 declare c public.crews;
 begin
   if auth.uid() is null then raise exception 'Sign in first'; end if;
@@ -111,16 +118,11 @@ begin
   if not found then raise exception 'No crew uses that code. Check it and try again.'; end if;
   update public.profiles set crew_id = c.id where id = auth.uid();
   return c;
-end $$;
+end
+$$ language plpgsql security definer set search_path to public;
 
 -- ============ Row level security ============
 
-alter table public.crews    enable row level security;
-alter table public.profiles enable row level security;
-alter table public.posts    enable row level security;
-alter table public.props    enable row level security;
-alter table public.comments enable row level security;
-alter table public.water    enable row level security;
 
 create policy "see my crew" on public.crews for select using (id = public.my_crew());
 
