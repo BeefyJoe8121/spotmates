@@ -8,20 +8,23 @@ import { CrewScreen } from '@/components/CrewScreen';
 import { T } from '@/components/ui';
 import { DataProvider, useData } from '@/lib/data';
 import { supabaseConfigured } from '@/lib/supabase';
-import { F, useTheme } from '@/lib/theme';
+import { F, ThemeProvider, useAppPrefs, useTheme } from '@/lib/theme';
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <DataProvider>
-        <Gate />
-      </DataProvider>
+      <ThemeProvider>
+        <DataProvider>
+          <Gate />
+        </DataProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
 
 function Gate() {
   const c = useTheme();
+  const { isDark } = useAppPrefs();
   const { ready, session, profile, loading } = useData();
   if (!supabaseConfigured) {
     return (
@@ -38,7 +41,7 @@ function Gate() {
   if (!profile?.crew_id) return <CrewScreen />;
   return (
     <>
-      <StatusBar style="auto" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerStyle: { backgroundColor: c.surface }, headerTintColor: c.ink, headerTitleStyle: { fontFamily: F.display, fontSize: 22 }, contentStyle: { backgroundColor: c.bg } }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="log" options={{ presentation: 'modal', title: 'Log it' }} />

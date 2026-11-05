@@ -3,12 +3,18 @@
  * Main source: USDA FoodData Central (generic foods, restaurant and branded items).
  * Backup source: Open Food Facts (packaged foods), used if USDA is unavailable or rate-limited.
  */
+import { matchCommon } from './commonFoods';
+
 export type Serving = { label: string; grams: number };
 export type FoodResult = {
   id: string;
   name: string;
   brand?: string;
-  source: 'usda' | 'off';
+  source: 'usda' | 'off' | 'common';
+  /** Plain foods (not a brand-name product) */
+  generic?: boolean;
+  /** 0 basic ingredient, 1 prepared dish, 2 brand-name product */
+  tier?: number;
   per100: { kcal: number; protein: number; carbs: number; fat: number };
   servings: Serving[];
 };
@@ -68,6 +74,8 @@ function fromUsda(f: any): FoodResult | null {
     .forEach((m: any) => extra.push({ label: `${m.disseminationText} (${Math.round(m.gramWeight)} g)`, grams: m.gramWeight }));
   return {
     id: `usda-${f.fdcId}`,
+    generic: f.dataType !== 'Branded',
+    tier: f.dataType === 'Branded' ? 2 : /Survey/.test(String(f.dataType)) ? 1 : 0,
     name: titleCase(String(f.description)),
     brand: f.brandName || f.brandOwner ? titleCase(String(f.brandName || f.brandOwner)) : undefined,
     source: 'usda',
@@ -76,7 +84,7 @@ function fromUsda(f: any): FoodResult | null {
   };
 }
 async function searchUsda(query: string, signal?: AbortSignal): Promise<FoodResult[]> {
-  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(USDA_KEY)}&query=${encodeURIComponent(query)}&pageSize=30` +
+  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(USDA_KEY)}&query=${encodeURIComponent(query)}&pageSize=50&requireAllWords=true` +
     `&dataType=${encodeURIComponent('Survey (FNDDS)')}&dataType=Branded&dataType=${encodeURIComponent('SR Legacy')}&dataType=Foundation`;
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(res.status === 429 ? 'rate' : `usda ${res.status}`);
@@ -112,18 +120,55 @@ async function searchOff(query: string, signal?: AbortSignal): Promise<FoodResul
   return (json.products ?? []).map(fromOff).filter(Boolean) as FoodResult[];
 }
 
+/** Everyday foods from the built-in list, instantly and without using the internet */
+export function commonResults(query: string): FoodResult[] {
+  return matchCommon(query).map((f) => ({ id: `common-${f.name}`, name: f.name, source: 'common' as const, generic: true, per100: f.per100, servings: baseServings(f.servings) }));
+}
+
+/** Put the food you most likely meant first: plain foods before brands and candy, names that start with your words, shorter names */
+const TREATS = /\b(candy|candies|chocolate|cake|cookie|pie|cereal|baby|snack|frosting|nog)\b/;
+function rank(results: FoodResult[], query: string): FoodResult[] {
+  const words = query.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const askedForTreat = TREATS.test(query.toLowerCase());
+  const score = (r: FoodResult) => {
+    const name = r.name.toLowerCase();
+    const nameWords = name.split(/[^a-z0-9]+/).filter(Boolean);
+    let s = (r.tier ?? (r.generic ? 1 : 2)) === 2 ? 6 : (r.tier ?? 1) * 2;
+    if (nameWords[0]?.startsWith(words[0] ?? '')) s -= 4;
+    s -= words.filter((w) => nameWords.some((x) => x === w || x === `${w}s` || `${x}s` === w)).length * 3;
+    s += words.filter((w) => !nameWords.some((x) => x.startsWith(w))).length * 5;
+    s += Math.min(6, nameWords.length * 0.5);
+    if (!askedForTreat && TREATS.test(name)) s += 8;
+    return s;
+  };
+  const seen = new Set<string>();
+  return results
+    .map((r) => ({ r, s: score(r) }))
+    .sort((a, b) => a.s - b.s)
+    .map((x) => x.r)
+    .filter((r) => { const k = `${r.name}|${r.brand ?? ''}`.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+    .slice(0, 30);
+}
+
+const cache = new Map<string, { results: FoodResult[]; note?: string }>();
+
+/** Database search (USDA, then Open Food Facts as a backup), ranked, cached per search */
 export async function searchFoods(query: string, signal?: AbortSignal): Promise<{ results: FoodResult[]; note?: string }> {
-  const q = query.trim();
+  const q = query.trim().toLowerCase();
   if (!q) return { results: [] };
+  const hit = cache.get(q);
+  if (hit) return hit;
+  let out: { results: FoodResult[]; note?: string };
   try {
     const results = await searchUsda(q, signal);
-    if (results.length) return { results };
+    out = { results: rank(results.length ? results : await searchOff(q, signal).catch(() => []), q) };
   } catch (e: any) {
     if (e?.name === 'AbortError') throw e;
     const off = await searchOff(q, signal).catch(() => [] as FoodResult[]);
-    return { results: off, note: e?.message === 'rate' ? 'The main food database is busy, so these results come from Open Food Facts.' : undefined };
+    out = { results: rank(off, q), note: e?.message === 'rate' ? 'The main food database hit its hourly limit, so more results come from Open Food Facts.' : undefined };
   }
-  return { results: await searchOff(q, signal).catch(() => []) };
+  cache.set(q, out);
+  return out;
 }
 
 /** Rebuild a searchable result from a food you've logged before */

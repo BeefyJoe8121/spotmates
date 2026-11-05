@@ -1,10 +1,10 @@
 import { router } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Btn, Field, H, Label, T } from '@/components/ui';
 import { useData } from '@/lib/data';
-import { FoodItem, FoodResult, foodBus, fromRecent, macrosFor, searchFoods } from '@/lib/foods';
+import { commonResults, FoodItem, FoodResult, foodBus, fromRecent, macrosFor, searchFoods } from '@/lib/foods';
 import { F, useTheme } from '@/lib/theme';
 import { fmt, num } from '@/lib/util';
 
@@ -40,16 +40,18 @@ export default function FoodScreen() {
       const r = await searchFoods(t, a.signal);
       if (ctl.current !== a) return;
       setResults(r.results); setNote(r.note ?? null);
-      if (!r.results.length) setErr(`No foods match "${t}". Try fewer words, like "greek yogurt".`);
+      if (!r.results.length && !commonResults(t).length) setErr(`No foods match "${t}". Try fewer words, like "greek yogurt".`);
     } catch (e: any) {
       if (e?.name !== 'AbortError') setErr("Couldn't reach the food database. Check your connection and try again.");
     } finally { if (ctl.current === a) setBusy(false); }
   }
 
-  // Search shortly after typing stops
+  // Everyday foods show instantly; the big database is searched once typing pauses (saves the free search limit)
+  const common = useMemo(() => commonResults(q), [q]);
   useEffect(() => {
-    if (q.trim().length < 3) return;
-    const t = setTimeout(() => run(q), 600);
+    setErr(null);
+    if (q.trim().length < 3) { setSearched(false); setResults([]); return; }
+    const t = setTimeout(() => run(q), 900);
     return () => clearTimeout(t);
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -80,19 +82,31 @@ export default function FoodScreen() {
           style={{ backgroundColor: c.bg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 16, color: c.ink, fontFamily: F.body, borderWidth: 1, borderColor: c.line }}
         />
       </View>
-      {busy ? <View style={{ padding: 20 }}><ActivityIndicator color={c.muted} /></View> : null}
-      {err ? <T muted style={{ padding: 16 }}>{err}</T> : null}
-      {note ? <T muted size={12} style={{ paddingHorizontal: 16, paddingTop: 10 }}>{note}</T> : null}
-      {searched && results.length ? (
-        <FlatList data={results} keyExtractor={(f) => f.id} renderItem={({ item }) => row(item)} keyboardShouldPersistTaps="handled" />
-      ) : !searched ? (
+      {q.trim().length >= 2 ? (
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 40 }}>
+          {common.length ? (
+            <>
+              <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}><Label>Common foods</Label></View>
+              {common.map((f) => row(f))}
+            </>
+          ) : null}
+          <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Label>{common.length ? 'More results' : 'Results'}</Label>
+            {busy ? <ActivityIndicator size="small" color={c.muted} /> : null}
+          </View>
+          {note ? <T muted size={12} style={{ paddingHorizontal: 16, paddingBottom: 8 }}>{note}</T> : null}
+          {err ? <T muted style={{ paddingHorizontal: 16 }}>{err}</T> : null}
+          {!busy && !err && searched && !results.length && common.length ? <T muted style={{ paddingHorizontal: 16 }}>No other matches.</T> : null}
+          {results.map((f) => row(f))}
+        </ScrollView>
+      ) : (
         <ScrollView keyboardShouldPersistTaps="handled">
           <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}><Label>{recent.length ? 'Recent foods' : 'Search tips'}</Label></View>
           {recent.length ? recent.map((f) => row(fromRecent(f), `${f.serving}${f.qty !== 1 ? ` × ${f.qty}` : ''}`)) : (
             <T muted style={{ paddingHorizontal: 16 }}>Type a food like "chicken breast", "banana" or "Chick-fil-A nuggets". Tap a result to pick the serving size.</T>
           )}
         </ScrollView>
-      ) : null}
+      )}
     </KeyboardAvoidingView>
   );
 }

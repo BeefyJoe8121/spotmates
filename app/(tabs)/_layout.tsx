@@ -2,6 +2,7 @@ import { router, Tabs } from 'expo-router';
 import React from 'react';
 import { Pressable, Text } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import { StreakBadge } from '@/components/StreakBadge';
 import { F, useTheme } from '@/lib/theme';
 
 function LogButton({ kind }: { kind: 'meal' | 'workout' }) {
@@ -32,6 +33,7 @@ export default function TabsLayout() {
   return (
     <Tabs screenOptions={{
       headerStyle: { backgroundColor: c.surface }, headerTintColor: c.ink, headerShadowVisible: false,
+      headerLeft: () => <StreakBadge />, headerTitleAlign: 'center',
       headerTitleStyle: { fontFamily: F.display, fontSize: 26, textTransform: 'uppercase' } as any,
       tabBarStyle: { backgroundColor: c.surface, borderTopColor: c.line },
       tabBarActiveTintColor: c.ink, tabBarInactiveTintColor: c.muted,

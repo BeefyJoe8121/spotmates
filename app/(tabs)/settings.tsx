@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Share, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Share, View } from 'react-native';
+import { flameXml, StreakIcon } from '@/components/StreakBadge';
+import { SvgXml } from 'react-native-svg';
+import { HOLI } from '@/lib/holidays';
 import { Btn, Card, Field, H, Label, Seg, T } from '@/components/ui';
 import { useData } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
-import { useTheme } from '@/lib/theme';
+import { SCHEMES, TIERS, tierFor, useAppPrefs, useTheme } from '@/lib/theme';
 import { macroKcal, num, pctToGrams } from '@/lib/util';
 
 const str = (v: number | null | undefined) => (v == null ? '' : String(v));
@@ -105,6 +108,9 @@ export default function SettingsScreen() {
           </View>
         </Card>
 
+        <AppearanceCard />
+        <StreakCard />
+
         <Card>
           <H size={22}>Your crew</H>
           <T>{crew?.name}</T>
@@ -125,5 +131,74 @@ export default function SettingsScreen() {
         </Card>
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+function AppearanceCard() {
+  const c = useTheme();
+  const { prefs, setPref, isDark } = useAppPrefs();
+  return (
+    <Card>
+      <H size={22}>Appearance</H>
+      <View style={{ gap: 6 }}>
+        <Label>Theme</Label>
+        <Seg value={prefs.mode} options={[['system', 'Match phone'], ['light', 'Light'], ['dark', 'Dark']]} onChange={(v) => setPref('mode', v)} />
+      </View>
+      <View style={{ gap: 6 }}>
+        <Label>Color scheme</Label>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {SCHEMES.map((sc) => {
+            const on = prefs.scheme === sc.id;
+            const v = isDark ? sc.D : sc.L;
+            const dots = v ? [v.p, v.c, v.f] : [c.protein, c.lift, c.meal];
+            return (
+              <Pressable key={sc.id} onPress={() => setPref('scheme', sc.id)} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={sc.name}
+                style={{ width: '48%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 12, borderWidth: on ? 2 : 1, borderColor: on ? c.accent : c.line, backgroundColor: on ? c.sunk : c.surface }}>
+                <View style={{ flexDirection: 'row' }}>
+                  {dots.map((d, i) => <View key={i} style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: d, marginLeft: i ? -5 : 0, borderWidth: 1.5, borderColor: c.surface }} />)}
+                </View>
+                <T size={13} bold={on} numberOfLines={2} style={{ flex: 1 }}>{sc.name}</T>
+              </Pressable>
+            );
+          })}
+        </View>
+        <T muted size={12}>Colors apply to this phone only. Your friends keep their own.</T>
+      </View>
+    </Card>
+  );
+}
+
+function StreakCard() {
+  const c = useTheme();
+  const { prefs, setPref, streak } = useAppPrefs();
+  const cur = tierFor(streak);
+  return (
+    <Card>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <StreakIcon n={streak} size={30} />
+        <View style={{ flex: 1 }}>
+          <H size={22}>Streak: {streak} day{streak === 1 ? '' : 's'}</H>
+          <T muted size={13}>Days in a row you've opened Spot Mates</T>
+        </View>
+      </View>
+      <View style={{ gap: 6 }}>
+        <Label>Holiday streak icons</Label>
+        <Seg value={prefs.streakIcon} options={[['holiday', 'Holiday icons'], ['fire', 'Always fire']]} onChange={(v) => setPref('streakIcon', v)} />
+        <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+          {Object.values(HOLI).map((h) => <SvgXml key={h.name} xml={h.svg} width={22} height={22} />)}
+        </View>
+        <T muted size={12}>Turkey, tree, heart, shamrock, egg and firework around those holidays.</T>
+      </View>
+      <View style={{ gap: 2 }}>
+        <Label>Flame milestones</Label>
+        {TIERS.map((t, i) => (
+          <View key={t.at} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5, opacity: i <= cur ? 1 : 0.55 }}>
+            <SvgXml xml={flameXml(i)} width={14} height={18} />
+            <T size={14} bold={i === cur} style={{ flex: 1 }}>{t.at === 0 ? 'Day 1' : t.name}</T>
+            <T mono muted size={12}>{i < cur ? 'Done' : i === cur ? 'Now' : `${t.at - streak} to go`}</T>
+          </View>
+        ))}
+      </View>
+    </Card>
   );
 }
