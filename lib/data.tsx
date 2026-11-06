@@ -7,12 +7,14 @@ import { addDays, ageMs, POST_TTL_MS, today, uuid } from './util';
 
 export type Exercise = { name: string; sets: string; reps: string; lbs: string };
 export type Post = {
-  id: string; author: string; crew_id: string; kind: 'meal' | 'workout'; day: string;
+  id: string; author: string; crew_id: string; kind: 'meal' | 'workout' | 'pr'; day: string;
   title: string | null; notes: string | null; photo_path: string | null;
   meal_type: string | null; place: string | null; kcal: number | null; protein: number | null; carbs: number | null; fat: number | null;
   wtype: string | null; minutes: number | null; exercises: Exercise[]; created_at: string;
   /** Foods in a meal, MyFitnessPal style (empty for older posts and workouts) */
   foods?: FoodItem[];
+  /** PRs: title is the lift */
+  lbs?: number | null; reps?: number | null;
 };
 export type Profile = {
   id: string; display_name: string | null; crew_id: string | null;
@@ -27,7 +29,7 @@ export type WaterDay = { oz: number; entries: { oz: number; t: number }[] };
 type Ctx = {
   session: Session | null; ready: boolean; uid: string | null;
   profile: Profile | null; crew: Crew | null; members: Record<string, Profile>;
-  posts: Post[]; props: Prop[]; comments: Comment[]; water: WaterDay; loading: boolean;
+  posts: Post[]; prs: Post[]; props: Prop[]; comments: Comment[]; water: WaterDay; loading: boolean;
   refresh: () => Promise<void>;
   nameOf: (id: string) => string;
   saveProfile: (patch: Partial<Profile>) => Promise<string | null>;
@@ -58,6 +60,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [crew, setCrew] = useState<Crew | null>(null);
   const [members, setMembers] = useState<Record<string, Profile>>({});
   const [posts, setPosts] = useState<Post[]>([]);
+  const [prs, setPrs] = useState<Post[]>([]);
   const [props, setProps] = useState<Prop[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [water, setWater] = useState<WaterDay>({ oz: 0, entries: [] });
@@ -85,22 +88,26 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const loadFeed = useCallback(async (crewId: string | null) => {
     if (!uid) return;
     const since = addDays(today(), -60);
-    const [{ data: ps }, { data: ms }, { data: w }] = await Promise.all([
-      crewId ? supabase.from('posts').select('*').eq('crew_id', crewId).gte('day', since).order('created_at', { ascending: false }).limit(500) : Promise.resolve({ data: [] as Post[] }),
+    const [{ data: ps }, { data: pr0 }, { data: ms }, { data: w }] = await Promise.all([
+      crewId ? supabase.from('posts').select('*').eq('crew_id', crewId).neq('kind', 'pr').gte('day', since).order('created_at', { ascending: false }).limit(500) : Promise.resolve({ data: [] as Post[] }),
+      // PRs: all of them, so "+10 lb over your last PR" works across months
+      crewId ? supabase.from('posts').select('*').eq('crew_id', crewId).eq('kind', 'pr').order('day', { ascending: false }).limit(1000) : Promise.resolve({ data: [] as Post[] }),
       crewId ? supabase.from('profiles').select('*').eq('crew_id', crewId) : Promise.resolve({ data: [] as Profile[] }),
       supabase.from('water').select('oz,entries').eq('user_id', uid).eq('day', today()).maybeSingle(),
     ]);
     const list = (ps as Post[]) ?? [];
+    const prList = (pr0 as Post[]) ?? [];
     setPosts(list);
+    setPrs(prList);
     const map: Record<string, Profile> = {};
     ((ms as Profile[]) ?? []).forEach((m) => (map[m.id] = m));
     setMembers(map);
     setWater(w ? { oz: (w as any).oz ?? 0, entries: (w as any).entries ?? [] } : { oz: 0, entries: [] });
-    const ids = list.map((p) => p.id);
+    const ids = [...list, ...prList].map((p) => p.id);
     if (ids.length) {
       const [{ data: pr }, { data: cm }] = await Promise.all([
-        supabase.from('props').select('post_id,user_id').in('post_id', ids),
-        supabase.from('comments').select('*').in('post_id', ids).order('created_at'),
+        supabase.from('props').select('post_id,user_id').in('post_id', ids.slice(0, 900)),
+        supabase.from('comments').select('*').in('post_id', ids.slice(0, 900)).order('created_at'),
       ]);
       setProps((pr as Prop[]) ?? []);
       setComments((cm as Comment[]) ?? []);
@@ -112,7 +119,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     try { const p = await loadProfile(); await loadFeed(p?.crew_id ?? null); } finally { setLoading(false); }
   }, [loadProfile, loadFeed]);
 
-  useEffect(() => { if (uid) refresh(); else { setPosts([]); setMembers({}); setProfile(null); setCrew(null); } }, [uid, refresh]);
+  useEffect(() => { if (uid) refresh(); else { setPosts([]); setPrs([]); setMembers({}); setProfile(null); setCrew(null); } }, [uid, refresh]);
 
   // Live updates from the crew
   useEffect(() => {
@@ -144,7 +151,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const nameOf = useCallback((id: string) => members[id]?.display_name || (id === uid ? 'You' : 'Teammate'), [members, uid]);
 
   const value = useMemo<Ctx>(() => ({
-    session, ready, uid, profile, crew, members, posts, props, comments, water, loading, refresh, nameOf,
+    session, ready, uid, profile, crew, members, posts, prs, props, comments, water, loading, refresh, nameOf,
 
     async saveProfile(patch) {
       if (!uid) return 'Sign in first.';
@@ -179,6 +186,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         if (photo_path) supabase.storage.from('photos').remove([photo_path]);
         if (/foods/.test(error.message ?? '')) return 'Food logging needs a one-time database update. Ask Declan to run the foods update in Supabase.';
+        if (p.kind === 'pr' && /kind|lbs|reps|check constraint/.test(error.message ?? '')) return 'PRs need a one-time database update. Ask Declan to run the progress update in Supabase.';
         return errMsg(error);
       }
       await loadFeed(crew.id);
@@ -222,7 +230,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setWater({ oz: total, entries });
       await supabase.from('water').upsert({ user_id: uid, day: today(), oz: total, entries });
     },
-  }), [session, ready, uid, profile, crew, members, posts, props, comments, water, loading, refresh, nameOf, loadProfile, loadFeed]);
+  }), [session, ready, uid, profile, crew, members, posts, prs, props, comments, water, loading, refresh, nameOf, loadProfile, loadFeed]);
 
   return <DataCtx.Provider value={value}>{children}</DataCtx.Provider>;
 }

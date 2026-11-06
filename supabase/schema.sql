@@ -30,7 +30,7 @@ create table public.posts (
   id uuid primary key default gen_random_uuid(),
   author uuid not null default auth.uid() references auth.users on delete cascade,
   crew_id uuid not null references public.crews on delete cascade,
-  kind text not null check (kind in ('meal','workout')),
+  kind text not null check (kind in ('meal','workout','pr')),
   day date not null,
   title text check (char_length(title) <= 80),
   notes text check (char_length(notes) <= 600),
@@ -41,6 +41,8 @@ create table public.posts (
   -- workouts
   wtype text, minutes int,
   exercises jsonb not null default '[]'::jsonb,
+  -- PRs (title = the lift)
+  lbs numeric, reps int,
   foods jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
 );
@@ -174,3 +176,24 @@ create policy "upload my photos" on storage.objects for insert to authenticated
   with check (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
 create policy "delete my photos" on storage.objects for delete to authenticated
   using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ============ Progress: weigh-ins and goal weight (private) ============
+create table public.weighins (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users on delete cascade,
+  day date not null,
+  lbs numeric not null check (lbs > 0 and lbs < 1000),
+  created_at timestamptz not null default now()
+);
+alter table public.weighins enable row level security;
+create index weighins_user_day on public.weighins (user_id, day);
+create policy "my weigh-ins" on public.weighins for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create table public.goal_plans (
+  user_id uuid primary key default auth.uid() references auth.users on delete cascade,
+  plan jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.goal_plans enable row level security;
+create policy "my goal plan" on public.goal_plans for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+grant select, insert, update, delete on public.weighins, public.goal_plans to authenticated;

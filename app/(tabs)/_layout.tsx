@@ -22,6 +22,7 @@ const icon = (name: string) => ({ color, size }: { color: string; size: number }
       {name === 'macros' ? <><Circle cx={12} cy={12} r={8} {...p} /><Path d="M12 4a8 8 0 0 1 8 8h-8z" fill={color} /></> : null}
       {name === 'meals' ? <><Circle cx={12} cy={13} r={7} {...p} /><Circle cx={12} cy={13} r={3.5} {...p} /><Path d="M4 3v5M2.5 3v3.5a1.5 1.5 0 0 0 3 0V3" {...p} /></> : null}
       {name === 'workouts' ? <><Rect x={2} y={9} width={3} height={6} rx={1} {...p} /><Rect x={19} y={9} width={3} height={6} rx={1} {...p} /><Rect x={5} y={7} width={3} height={10} rx={1} {...p} /><Rect x={16} y={7} width={3} height={10} rx={1} {...p} /><Path d="M8 12h8" {...p} /></> : null}
+      {name === 'progress' ? <><Path d="M3 20h18" {...p} /><Path d="M4 16l5-5 4 3 7-8" {...p} /><Path d="M15 6h5v5" {...p} /></> : null}
       {name === 'friends' ? <><Circle cx={9} cy={8} r={3.5} {...p} /><Path d="M2.5 20a6.5 6.5 0 0 1 13 0" {...p} /><Circle cx={17} cy={9} r={2.8} {...p} /><Path d="M17 14.5a5 5 0 0 1 4.5 5" {...p} /></> : null}
       {name === 'settings' ? <><Circle cx={12} cy={12} r={3} {...p} /><Path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" {...p} /></> : null}
     </Svg>
@@ -42,6 +43,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ title: 'Macros', tabBarIcon: icon('macros'), headerRight: () => <LogButton kind="meal" /> }} />
       <Tabs.Screen name="meals" options={{ title: 'Meals', tabBarIcon: icon('meals'), headerRight: () => <LogButton kind="meal" /> }} />
       <Tabs.Screen name="workouts" options={{ title: 'Workouts', tabBarIcon: icon('workouts'), headerRight: () => <LogButton kind="workout" /> }} />
+      <Tabs.Screen name="progress" options={{ title: 'Progress', tabBarIcon: icon('progress') }} />
       <Tabs.Screen name="friends" options={{ title: 'Friends', tabBarIcon: icon('friends') }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: icon('settings') }} />
     </Tabs>

@@ -46,6 +46,7 @@ function Gate() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="log" options={{ presentation: 'modal', title: 'Log it' }} />
         <Stack.Screen name="food" options={{ presentation: 'modal', title: 'Add food' }} />
+        <Stack.Screen name="pr" options={{ presentation: 'modal', title: 'Log a PR' }} />
       </Stack>
     </>
   );

@@ -16,7 +16,7 @@ export const num = (v: unknown): number | null => {
 };
 export const fmt = (n: number | null | undefined) => (n == null ? '–' : Math.round(n).toLocaleString());
 
-const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export function dayLabel(s: string) {
   const t = today();
@@ -67,3 +67,7 @@ export const uuid = () =>
     const r = (Math.random() * 16) | 0;
     return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
   });
+
+/** Monday of the week a day falls in */
+export const weekStart = (s: string) => { const d = parseDay(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return dayStr(d); };
+export const shortDay = (s: string) => { const d = parseDay(s); return `${MON[d.getMonth()]} ${d.getDate()}`; };

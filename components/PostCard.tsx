@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 import { Post, useData } from '@/lib/data';
 import { photoUrl } from '@/lib/supabase';
+import { prevBest, prLbs, prReps, prScore, TROPHY } from '@/lib/prs';
 import { F, useTheme } from '@/lib/theme';
-import { ageMs, fmt, macroKcal, num, POST_TTL_MS, relTime, timeOf, ttlText } from '@/lib/util';
+import { ageMs, dayLabel, fmt, macroKcal, num, POST_TTL_MS, relTime, timeOf, ttlText } from '@/lib/util';
 import { Btn, Field, T } from './ui';
 
 export function PostCard({ post }: { post: Post }) {
   const c = useTheme();
-  const { uid, nameOf, props, comments, toggleProp, deletePost } = useData();
+  const { uid, nameOf, props, comments, toggleProp, deletePost, prs } = useData();
   const [open, setOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [armDelete, setArmDelete] = useState(false);
@@ -18,15 +20,16 @@ export function PostCard({ post }: { post: Post }) {
   const propCount = props.filter((p) => p.post_id === post.id).length;
   const gave = props.some((p) => p.post_id === post.id && p.user_id === uid);
   const thread = comments.filter((x) => x.post_id === post.id);
-  const tagLabel = meal ? [post.meal_type || 'Meal', post.place].filter(Boolean).join(' · ') : post.wtype || 'Workout';
+  const pr = post.kind === 'pr';
+  const tagLabel = pr ? 'PR' : meal ? [post.meal_type || 'Meal', post.place].filter(Boolean).join(' · ') : post.wtype || 'Workout';
 
   const meta = (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
       <T bold size={13}>{nameOf(post.author)}</T>
-      <View style={{ backgroundColor: meal ? c.mealSoft : c.liftSoft, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 }}>
-        <T bold size={11} style={{ color: meal ? c.meal : c.lift, letterSpacing: 1, textTransform: 'uppercase' }}>{tagLabel}</T>
+      <View style={{ backgroundColor: pr ? c.sunk : meal ? c.mealSoft : c.liftSoft, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 }}>
+        <T bold size={11} style={{ color: pr ? c.gold : meal ? c.meal : c.lift, letterSpacing: 1, textTransform: 'uppercase' }}>{tagLabel}</T>
       </View>
-      <T mono muted size={12} style={{ marginLeft: 'auto' }}>{timeOf(post.created_at)}</T>
+      <T mono muted size={12} style={{ marginLeft: 'auto' }}>{pr ? dayLabel(post.day) : timeOf(post.created_at)}</T>
       {meal || photo ? <T muted size={11}>{meal ? ttlText(post.created_at) : `Photo ${ttlText(post.created_at).toLowerCase()}`}</T> : null}
     </View>
   );
@@ -48,6 +51,30 @@ export function PostCard({ post }: { post: Post }) {
       ) : null}
     </View>
   );
+
+  if (pr) {
+    const lbs = prLbs(post), reps = prReps(post), est = prScore(post);
+    const pb = prevBest(prs, post);
+    const delta = pb ? Math.round(est - prScore(pb)) : null;
+    return (
+      <View style={{ backgroundColor: c.surface, borderColor: c.line, borderWidth: 1, borderRadius: 14, padding: 14, gap: 10 }}>
+        {meta}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <SvgXml xml={TROPHY} width={40} height={40} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontFamily: F.display, fontSize: 26, lineHeight: 28, textTransform: 'uppercase', color: c.ink }} numberOfLines={2}>{post.title}</Text>
+            <T mono size={15}><T mono bold size={20}>{fmt(lbs)}</T> lb × {fmt(reps)} rep{reps === 1 ? '' : 's'}</T>
+          </View>
+        </View>
+        <View style={{ gap: 2 }}>
+          {reps > 1 ? <T muted size={13}>Est. 1-rep max <T bold size={13}>{fmt(est)}</T> lb</T> : null}
+          <T muted size={13}>{pb ? (delta! > 0 ? <><T bold size={13} style={{ color: c.protein }}>+{fmt(delta)} lb</T> over last PR ({fmt(prLbs(pb))}×{fmt(prReps(pb))})</> : `Last PR ${fmt(prLbs(pb))}×${fmt(prReps(pb))}`) : 'First logged PR for this lift'}</T>
+        </View>
+        {post.notes ? <T>{post.notes}</T> : null}
+        {actions}
+      </View>
+    );
+  }
 
   if (meal) {
     const kc = post.kcal ?? macroKcal(post.protein, post.carbs, post.fat);
