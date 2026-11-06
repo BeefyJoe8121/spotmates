@@ -66,8 +66,10 @@ export function Field({ label, style, ...rest }: TextInputProps & { label?: stri
   );
 }
 
-export function Seg<V extends string>({ value, options, onChange, tint }: {
+export function Seg<V extends string>({ value, options, onChange, tint, dots }: {
   value: V; options: [V, string][]; onChange: (v: V) => void; tint?: (v: V, c: Palette) => { bg: string; fg: string } | null;
+  /** Options that get a small "something new" dot in their top-left corner */
+  dots?: Partial<Record<V, boolean>>;
 }) {
   const c = useTheme();
   return (
@@ -76,9 +78,10 @@ export function Seg<V extends string>({ value, options, onChange, tint }: {
         const on = v === value;
         const t = on ? tint?.(v, c) ?? { bg: c.ink, fg: c.bg } : null;
         return (
-          <Pressable key={v} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => onChange(v)}
+          <Pressable key={v} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityHint={dots?.[v] ? 'Has new posts' : undefined} onPress={() => onChange(v)}
             style={{ flex: 1, paddingVertical: 9, alignItems: 'center', backgroundColor: t ? t.bg : 'transparent' }}>
             <Text style={{ fontFamily: F.display, fontSize: 17, textTransform: 'uppercase', letterSpacing: 0.6, color: t ? t.fg : c.muted }}>{label}</Text>
+            {dots?.[v] ? <View accessibilityLabel="New posts" style={{ position: 'absolute', top: 5, left: 6, width: 9, height: 9, borderRadius: 5, backgroundColor: c.danger, borderWidth: 1.5, borderColor: c.surface }} /> : null}
           </Pressable>
         );
       })}
