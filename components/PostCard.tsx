@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Image, Pressable, Text, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
-import { Post, useData } from '@/lib/data';
+import { isRest, Post, useData } from '@/lib/data';
 import { photoUrl } from '@/lib/supabase';
 import { prevBest, prLbs, prReps, prScore, TROPHY } from '@/lib/prs';
 import { F, useTheme } from '@/lib/theme';
@@ -22,13 +22,14 @@ export function PostCard({ post }: { post: Post }) {
   const gave = props.some((p) => p.post_id === post.id && p.user_id === uid);
   const thread = comments.filter((x) => x.post_id === post.id);
   const pr = post.kind === 'pr';
-  const tagLabel = pr ? 'PR' : meal ? [post.meal_type || 'Meal', post.place].filter(Boolean).join(' · ') : post.wtype || 'Workout';
+  const rest = isRest(post);
+  const tagLabel = pr ? 'PR' : meal ? [post.meal_type || 'Meal', post.place].filter(Boolean).join(' · ') : rest ? 'Rest day' : post.wtype || 'Workout';
 
   const meta = (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
       <T bold size={13}>{nameOf(post.author)}</T>
-      <View style={{ backgroundColor: pr ? c.sunk : meal ? c.mealSoft : c.liftSoft, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 }}>
-        <T bold size={11} style={{ color: pr ? c.gold : meal ? c.meal : c.lift, letterSpacing: 1, textTransform: 'uppercase' }}>{tagLabel}</T>
+      <View style={{ backgroundColor: pr || rest ? c.sunk : meal ? c.mealSoft : c.liftSoft, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 }}>
+        <T bold size={11} style={{ color: pr ? c.gold : rest ? c.muted : meal ? c.meal : c.lift, letterSpacing: 1, textTransform: 'uppercase' }}>{tagLabel}</T>
       </View>
       <T mono muted size={12} style={{ marginLeft: 'auto' }}>{pr ? dayLabel(post.day) : timeOf(post.created_at)}</T>
       {meal || photo ? <T muted size={11}>{meal ? ttlText(post.created_at) : `Photo ${ttlText(post.created_at).toLowerCase()}`}</T> : null}
@@ -107,6 +108,20 @@ export function PostCard({ post }: { post: Post }) {
               ))}
             </View>
           ) : null}
+          {post.notes ? <T>{post.notes}</T> : null}
+          {actions}
+        </View>
+      </View>
+    );
+  }
+
+  if (rest) {
+    return (
+      <View style={{ backgroundColor: c.surface, borderColor: c.muted, borderStyle: 'dashed', borderWidth: 1.5, borderRadius: 14, overflow: 'hidden' }}>
+        {photo ? <Image source={{ uri: photo }} style={{ width: '100%', aspectRatio: 4 / 3, backgroundColor: c.sunk }} accessibilityLabel={`Rest day photo: ${post.title ?? ''}`} /> : null}
+        <View style={{ padding: 14, gap: 8 }}>
+          {meta}
+          <Text style={{ fontFamily: F.display, fontSize: 28, lineHeight: 30, textTransform: 'uppercase', color: c.muted }}>{post.title || 'Rest day'}</Text>
           {post.notes ? <T>{post.notes}</T> : null}
           {actions}
         </View>

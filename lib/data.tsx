@@ -18,6 +18,9 @@ export type Post = {
   /** PRs: title is the lift */
   lbs?: number | null; reps?: number | null;
 };
+/** Rest days are workout posts with type "Rest": your crew sees them and they keep your streak, but they don't count as workouts */
+export const REST = 'Rest';
+export const isRest = (p: { kind: string; wtype?: string | null }) => p.kind === 'workout' && p.wtype === REST;
 export type Profile = {
   id: string; display_name: string | null; crew_id: string | null;
   kcal_goal: number | null; macro_mode: 'pct' | 'g'; pct_p: number | null; pct_c: number | null; pct_f: number | null;

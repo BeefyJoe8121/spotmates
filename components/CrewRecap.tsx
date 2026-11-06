@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
-import { useData } from '@/lib/data';
+import { isRest, useData } from '@/lib/data';
 import { useTheme } from '@/lib/theme';
 import { addDays, parseDay, shortDay, today, weekStart } from '@/lib/util';
 import { Chip, H, T } from './ui';
@@ -21,7 +21,7 @@ export function CrewRecap() {
     return ids.map((id) => {
       const mine = posts.filter((p) => p.author === id && p.day >= ws && p.day <= we);
       const myPrs = prs.filter((p) => p.author === id && p.day >= ws && p.day <= we);
-      const workouts = new Set(mine.filter((p) => p.kind === 'workout').map((p) => p.day)).size;
+      const workouts = new Set(mine.filter((p) => p.kind === 'workout' && !isRest(p)).map((p) => p.day)).size;
       const logged = new Set([...mine.map((p) => p.day), ...myPrs.map((p) => p.day)]).size;
       const goal = members[id]?.workout_goal ?? 4;
       return { id, workouts, logged, prs: myPrs.length, goal, hit: workouts >= goal };

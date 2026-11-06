@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import Svg, { Circle, Line, Polyline, Rect, SvgXml, Text as SvgText } from 'react-native-svg';
 import { Btn, Card, Chip, Field, H, Label, Seg, T } from '@/components/ui';
-import { useData } from '@/lib/data';
+import { isRest, useData } from '@/lib/data';
 import { INTENSITY, PACES, SavedPlan, WG, wgCalc, wgFrom } from '@/lib/goalWeight';
 import { e1rm, prevBest, prLbs, prReps, prScore, TROPHY } from '@/lib/prs';
 import { supabase } from '@/lib/supabase';
@@ -18,7 +18,7 @@ export default function ProgressScreen() {
   const c = useTheme();
   const { uid, posts, prs, profile, refresh, loading, streak: st } = useData();
   const streak = st.n;
-  const [days, setDays] = useState<{ day: string; kind: string }[]>([]);
+  const [days, setDays] = useState<{ day: string; kind: string; wtype: string | null }[]>([]);
   const [weights, setWeights] = useState<Weigh[]>([]);
   const [plan, setPlan] = useState<SavedPlan | null>(null);
   const [planLoaded, setPlanLoaded] = useState(false);
@@ -27,7 +27,7 @@ export default function ProgressScreen() {
   // A year of my meal/workout days (feed posts only cover 60 days)
   const loadDays = useCallback(async () => {
     if (!uid) return;
-    const { data } = await supabase.from('posts').select('day,kind').eq('author', uid).in('kind', ['meal', 'workout']).gte('day', addDays(today(), -400)).limit(3000);
+    const { data } = await supabase.from('posts').select('day,kind,wtype').eq('author', uid).in('kind', ['meal', 'workout']).gte('day', addDays(today(), -400)).limit(3000);
     setDays((data as any[]) ?? []);
   }, [uid]);
   const loadWeights = useCallback(async () => {
@@ -47,10 +47,18 @@ export default function ProgressScreen() {
   useEffect(() => { loadWeights(); loadPlan(); }, [loadWeights, loadPlan]);
 
   const workoutDays = useMemo(() => {
-    const s = new Set(days.filter((d) => d.kind === 'workout').map((d) => d.day));
-    posts.forEach((p) => { if (p.author === uid && p.kind === 'workout') s.add(p.day); });
+    const s = new Set(days.filter((d) => d.kind === 'workout' && !isRest(d)).map((d) => d.day));
+    posts.forEach((p) => { if (p.author === uid && p.kind === 'workout' && !isRest(p)) s.add(p.day); });
     return s;
   }, [days, posts, uid]);
+  // Rest days: the streak's free one each week, plus ones you logged (unless you also trained that day)
+  const restDays = useMemo(() => {
+    const s = new Set(st.rest);
+    days.forEach((d) => { if (isRest(d)) s.add(d.day); });
+    posts.forEach((p) => { if (p.author === uid && isRest(p)) s.add(p.day); });
+    workoutDays.forEach((d) => s.delete(d));
+    return s;
+  }, [st.rest, days, posts, uid, workoutDays]);
   const mealDays = useMemo(() => {
     const s = new Set(days.filter((d) => d.kind === 'meal').map((d) => d.day));
     posts.forEach((p) => { if (p.author === uid && p.kind === 'meal') s.add(p.day); });
@@ -89,7 +97,7 @@ export default function ProgressScreen() {
             <Stat value={`${mCount}`} label="Meals logged" />
             <Stat value={`${streak}`} label="Day streak" />
           </View>
-          <MonthCal workoutDays={workoutDays} mealDays={mealDays} prs={myPrs} allPrs={prs} rest={st.rest} />
+          <MonthCal workoutDays={workoutDays} mealDays={mealDays} prs={myPrs} allPrs={prs} rest={restDays} />
         </Card>
 
         <WeeksChart workoutDays={workoutDays} goal={goalW} />

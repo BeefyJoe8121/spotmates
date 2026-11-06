@@ -4,13 +4,13 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Btn, Chip, Field, Label, Seg, T } from '@/components/ui';
-import { Exercise, useData } from '@/lib/data';
+import { Exercise, REST, useData } from '@/lib/data';
 import { FoodItem, foodBus } from '@/lib/foods';
 import { useTheme } from '@/lib/theme';
 import { addDays, macroKcal, num, today } from '@/lib/util';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'] as const;
-const WTYPES = ['Strength', 'Cardio', 'Sport', 'Mobility', 'Other'];
+const WTYPES = ['Strength', 'Cardio', 'Sport', 'Mobility', 'Other', REST];
 
 function guessMeal(): (typeof MEAL_TYPES)[number] {
   const h = new Date().getHours();
@@ -19,7 +19,7 @@ function guessMeal(): (typeof MEAL_TYPES)[number] {
 
 export default function LogScreen() {
   const c = useTheme();
-  const params = useLocalSearchParams<{ kind?: string; meal?: string; search?: string }>();
+  const params = useLocalSearchParams<{ kind?: string; meal?: string; search?: string; rest?: string }>();
   const { addPost, saveMeal } = useData();
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState('');
@@ -33,12 +33,13 @@ export default function LogScreen() {
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const titleTouched = useRef(false);
   const [p, setP] = useState(''); const [cb, setCb] = useState(''); const [f, setF] = useState(''); const [k, setK] = useState('');
-  const [wtype, setWtype] = useState('Strength');
+  const [wtype, setWtype] = useState(params.rest === '1' ? REST : 'Strength');
   const [minutes, setMinutes] = useState('');
   const [ex, setEx] = useState<Exercise[]>([{ name: '', sets: '', reps: '', lbs: '' }]);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const meal = kind === 'meal';
+  const rest = !meal && wtype === REST;
 
   // Opened from the diary's "+ Add food": jump straight to food search
   const searched = useRef(false);
@@ -96,9 +97,9 @@ export default function LogScreen() {
       setBusy(null);
       if (e) return setErr(e);
     } else {
-      const exercises = ex.filter((e) => e.name.trim()).map((e) => ({ name: e.name.trim().slice(0, 60), sets: e.sets.trim(), reps: e.reps.trim(), lbs: e.lbs.trim() }));
-      if (!title.trim() && !photo && !exercises.length) return setErr('Add a photo, a name, or at least one exercise.');
-      const post = { kind, day, title: title.trim() || null, notes: notes.trim() || null, wtype, minutes: num(minutes) != null ? Math.round(num(minutes)!) : null, exercises };
+      const exercises = rest ? [] : ex.filter((e) => e.name.trim()).map((e) => ({ name: e.name.trim().slice(0, 60), sets: e.sets.trim(), reps: e.reps.trim(), lbs: e.lbs.trim() }));
+      if (!rest && !title.trim() && !photo && !exercises.length) return setErr('Add a photo, a name, or at least one exercise.');
+      const post = { kind, day, title: title.trim() || null, notes: notes.trim() || null, wtype, minutes: !rest && num(minutes) != null ? Math.round(num(minutes)!) : null, exercises };
       setBusy(photo ? 'Uploading photo…' : 'Posting…');
       const e = await addPost(post, photo?.base64);
       setBusy(null);
@@ -130,7 +131,7 @@ export default function LogScreen() {
           </View>
         )}
 
-        <Field label={meal ? 'What did you eat?' : 'Workout name'} value={title} onChangeText={(t) => { titleTouched.current = true; setTitle(t); }} placeholder={meal ? 'Chicken rice bowl' : 'Push day'} maxLength={80} />
+        <Field label={meal ? 'What did you eat?' : rest ? 'Name (optional)' : 'Workout name'} value={title} onChangeText={(t) => { titleTouched.current = true; setTitle(t); }} placeholder={meal ? 'Chicken rice bowl' : rest ? 'Rest day' : 'Push day'} maxLength={80} />
         {meal ? (
         <View style={{ gap: 8 }}>
           {foods.length ? (
@@ -197,9 +198,10 @@ export default function LogScreen() {
             <View style={{ gap: 6 }}>
               <Label>Type</Label>
               <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                {WTYPES.map((w) => <Chip key={w} title={w} on={wtype === w} onPress={() => setWtype(w)} />)}
+                {WTYPES.map((w) => <Chip key={w} title={w === REST ? 'Rest day' : w} on={wtype === w} onPress={() => setWtype(w)} />)}
               </View>
             </View>
+            {rest ? <T muted size={13}>Rest days show up for your crew and keep your streak going, but don't count toward your weekly workout goal.</T> : <>
             <Field label="Duration (min)" value={minutes} onChangeText={setMinutes} keyboardType="number-pad" />
             <View style={{ gap: 6 }}>
               <Label>Exercises</Label>
@@ -216,16 +218,17 @@ export default function LogScreen() {
               ))}
               <Btn small title="+ Add exercise" onPress={() => setEx((cur) => [...cur, { name: '', sets: '', reps: '', lbs: '' }])} style={{ alignSelf: 'flex-start' }} />
             </View>
+            </>}
           </>
         )}
 
         <Field label="Notes" value={notes} onChangeText={setNotes} multiline maxLength={600} style={{ minHeight: 70, textAlignVertical: 'top' }}
-          placeholder={meal ? 'How it tasted, how it fit the plan…' : 'PRs, how it felt, what to push next time…'} />
+          placeholder={meal ? 'How it tasted, how it fit the plan…' : rest ? 'Sore legs, sleeping in, active recovery walk…' : 'PRs, how it felt, what to push next time…'} />
         <T muted size={12}>{meal ? 'Meal posts disappear after 3 days to save space. Their macros still count.' : 'Workout photos disappear after 3 days to save space. The workout stays.'}</T>
         {err ? <T size={13} style={{ color: c.danger }}>{err}</T> : null}
         <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end' }}>
           <Btn title="Cancel" onPress={() => router.back()} />
-          <Btn kind="primary" title={busy ?? `Post ${kind}`} disabled={!!busy} onPress={submit} />
+          <Btn kind="primary" title={busy ?? (rest ? 'Post rest day' : `Post ${kind}`)} disabled={!!busy} onPress={submit} />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
