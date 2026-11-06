@@ -218,7 +218,7 @@ function WeeksChart({ workoutDays, goal }: { workoutDays: Set<string>; goal: num
   const weeks = Array.from({ length: 8 }, (_, i) => addDays(start, 7 * i));
   const data = weeks.map((w) => [...workoutDays].filter((d) => weekStart(d) === w).length);
   const maxV = Math.max(4, goal, ...data);
-  const H = 190, L = 22, R = 4, T0 = 14, B = 26, ih = H - T0 - B, cw = W ? (W - L - R) / 8 : 0;
+  const CH = 190, L = 22, R = 4, T0 = 14, B = 26, ih = CH - T0 - B, cw = W ? (W - L - R) / 8 : 0;
   const y = (v: number) => T0 + ih - (v / maxV) * ih;
   return (
     <Card>
@@ -226,7 +226,7 @@ function WeeksChart({ workoutDays, goal }: { workoutDays: Set<string>; goal: num
       <Nav label={off ? `8 weeks from ${shortDay(start)}` : 'This week and the next 7'} off={off} setOff={setOff} />
       <View onLayout={onLayout} style={{ width: '100%' }}>
         {W ? (
-          <Svg width={W} height={H}>
+          <Svg width={W} height={CH}>
             {Array.from({ length: maxV + 1 }, (_, v) => v).filter((v) => maxV <= 8 || v % 2 === 0).map((v) => (
               <React.Fragment key={v}>
                 <Line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke={c.line} strokeWidth={1} />
@@ -241,12 +241,12 @@ function WeeksChart({ workoutDays, goal }: { workoutDays: Set<string>; goal: num
                   {w >= cur ? <Rect x={bx} y={T0 + ih - gh} width={bw} height={gh} rx={3} fill="none" stroke={c.protein} strokeWidth={1.2} strokeDasharray="3 3" opacity={0.7} /> : null}
                   {v ? <Rect x={bx} y={y(v)} width={bw} height={(v / maxV) * ih} rx={3} fill={c.protein} /> : null}
                   {v ? <SvgText x={bx + bw / 2} y={y(v) - 4} fontSize={11} fontWeight="600" fill={c.ink} textAnchor="middle">{v}</SvgText> : null}
-                  <SvgText x={x0 + cw / 2} y={H - 8} fontSize={9.5} fill={w === cur ? c.ink : c.muted} fontWeight={w === cur ? '700' : '400'} textAnchor="middle">{w === cur ? 'This wk' : shortDay(w)}</SvgText>
+                  <SvgText x={x0 + cw / 2} y={CH - 8} fontSize={9.5} fill={w === cur ? c.ink : c.muted} fontWeight={w === cur ? '700' : '400'} textAnchor="middle">{w === cur ? 'This wk' : shortDay(w)}</SvgText>
                 </React.Fragment>
               );
             })}
           </Svg>
-        ) : <View style={{ height: H }} />}
+        ) : <View style={{ height: CH }} />}
       </View>
       <View style={{ flexDirection: 'row', gap: 14 }}>
         <Legend color={c.protein} label={`Workout days · goal ${goal}/wk`} />
@@ -281,7 +281,7 @@ function WeightSection({ weights, reload, onMissing }: { weights: Weigh[]; reloa
   }
   async function del(id: string) { await supabase.from('weighins').delete().eq('id', id); reload(); }
 
-  const H = 200, L = 34, R = 10, T0 = 14, B = 26, ih = H - T0 - B, iw = W - L - R;
+  const CH = 200, L = 34, R = 10, T0 = 14, B = 26, ih = CH - T0 - B, iw = W - L - R;
   let chart: React.ReactNode = (
     <View style={{ height: 150, alignItems: 'center', justifyContent: 'center', gap: 2 }}>
       <T bold>{weights.length ? 'No weigh-ins in these weeks' : 'No weigh-ins yet'}</T>
@@ -296,7 +296,7 @@ function WeightSection({ weights, reload, onMissing }: { weights: Weigh[]; reloa
     const ticks: number[] = []; for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) ticks.push(v);
     const last = pts[pts.length - 1];
     chart = (
-      <Svg width={W} height={H}>
+      <Svg width={W} height={CH}>
         {ticks.map((v) => (
           <React.Fragment key={v}>
             <Line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke={c.line} />
@@ -304,7 +304,7 @@ function WeightSection({ weights, reload, onMissing }: { weights: Weigh[]; reloa
           </React.Fragment>
         ))}
         {Array.from({ length: 6 }, (_, i) => addDays(minD, 7 * i)).map((d, i) => (
-          <SvgText key={d} x={x(d)} y={H - 8} fontSize={9.5} fill={c.muted} textAnchor={i === 0 ? 'start' : 'middle'}>{d === weekStart(t) ? 'This wk' : shortDay(d)}</SvgText>
+          <SvgText key={d} x={x(d)} y={CH - 8} fontSize={9.5} fill={c.muted} textAnchor={i === 0 ? 'start' : 'middle'}>{d === weekStart(t) ? 'This wk' : shortDay(d)}</SvgText>
         ))}
         {t >= minD && t <= maxD ? <Line x1={x(t)} x2={x(t)} y1={T0} y2={T0 + ih} stroke={c.muted} strokeDasharray="3 3" /> : null}
         {pts.length > 1 ? <Polyline points={pts.map((p) => `${x(p.day).toFixed(1)},${y(p.lbs).toFixed(1)}`).join(' ')} fill="none" stroke={c.protein} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" /> : null}
