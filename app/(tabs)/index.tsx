@@ -1,19 +1,27 @@
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { TodayCard, useTodayTotals } from '@/components/TodayCard';
 import { H, T } from '@/components/ui';
 import { WaterCard } from '@/components/WaterCard';
 import { Post, useData } from '@/lib/data';
 import { useTheme } from '@/lib/theme';
-import { fmt, macroKcal } from '@/lib/util';
+import { addDays, fmt, macroKcal, today } from '@/lib/util';
 
 const MEALS = [['Breakfast', 'Breakfast'], ['Lunch', 'Lunch'], ['Dinner', 'Dinner'], ['Snack', 'Snacks']] as const;
 const postKcal = (m: Post) => m.kcal ?? macroKcal(m.protein, m.carbs, m.fat);
 
 export default function MacrosScreen() {
   const c = useTheme();
-  const { refresh, loading } = useData();
+  const { refresh, loading, posts, uid, copyMeal } = useData();
+  const [copying, setCopying] = useState<string | null>(null);
+  const yest = addDays(today(), -1);
+  const yesterdays = (type: string) => posts.filter((p) => p.author === uid && p.kind === 'meal' && p.day === yest && (p.meal_type ?? 'Snack') === type);
+  async function copyYesterday(type: string) {
+    setCopying(type);
+    for (const p of yesterdays(type)) await copyMeal(p, today());
+    setCopying(null);
+  }
   const { meals } = useTodayTotals();
   const sorted = [...meals].sort((a, b) => a.created_at.localeCompare(b.created_at));
   const addFood = (meal: string) => router.push({ pathname: '/log', params: { kind: 'meal', meal, search: '1' } });
@@ -56,6 +64,12 @@ export default function MacrosScreen() {
                     <T mono size={15}>{fmt(postKcal(m))}</T>
                   </View>
                 )])}
+            {!list.length && yesterdays(type).length ? (
+              <Pressable onPress={() => copyYesterday(type)} disabled={copying === type} accessibilityRole="button"
+                style={({ pressed }) => ({ paddingHorizontal: 14, paddingVertical: 11, borderTopWidth: 1, borderTopColor: c.line, backgroundColor: pressed ? c.sunk : 'transparent' })}>
+                <T size={14} style={{ color: c.accent }}>{copying === type ? 'Copying…' : `⧉ Copy yesterday's ${label.toLowerCase()} · ${fmt(yesterdays(type).reduce((a, m) => a + postKcal(m), 0))} cal`}</T>
+              </Pressable>
+            ) : null}
             <Pressable onPress={() => addFood(type)} accessibilityRole="button"
               style={({ pressed }) => ({ paddingHorizontal: 14, paddingVertical: 11, borderTopWidth: 1, borderTopColor: c.line, backgroundColor: pressed ? c.sunk : 'transparent' })}>
               <T bold size={14} style={{ color: c.accent }}>+ Add food</T>

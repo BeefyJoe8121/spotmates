@@ -24,7 +24,8 @@ export type FoodItem = {
   kcal: number; protein: number; carbs: number; fat: number;
 };
 
-// Free key from fdc.nal.usda.gov/api-key-signup raises the limit from 30 to 1,000 searches an hour.
+// USDA key: set EXPO_PUBLIC_USDA_KEY in expo.dev → Environment variables (preview) for 1,000 searches an hour.
+// Without it the shared DEMO_KEY allows 30 an hour.
 const USDA_KEY = process.env.EXPO_PUBLIC_USDA_KEY || 'DEMO_KEY';
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -120,6 +121,33 @@ async function searchOff(query: string, signal?: AbortSignal): Promise<FoodResul
   return (json.products ?? []).map(fromOff).filter(Boolean) as FoodResult[];
 }
 
+/** Look up a packaged food by its barcode: Open Food Facts first, then USDA's branded foods */
+export async function lookupBarcode(code: string, signal?: AbortSignal): Promise<FoodResult | null> {
+  const digits = code.replace(/\D/g, '');
+  if (!digits) return null;
+  try {
+    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${digits}.json?fields=code,product_name,generic_name,brands,serving_size,serving_quantity,nutriments`, { signal, headers: { 'User-Agent': 'SpotMates/1.0 (friends fitness app)' } });
+    if (res.ok) {
+      const json = await res.json();
+      const f = json.status === 1 && json.product ? fromOff({ ...json.product, code: digits }) : null;
+      if (f && (f.per100.kcal || f.per100.protein || f.per100.carbs || f.per100.fat)) return f;
+    }
+  } catch (e: any) { if (e?.name === 'AbortError') throw e; }
+  // UPC-A barcodes are 12 digits; EAN-13 adds a leading 0
+  const variants = [...new Set([digits, digits.replace(/^0+/, ''), digits.length === 12 ? `0${digits}` : digits])];
+  for (const v of variants) {
+    try {
+      const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(USDA_KEY)}&query=${v}&dataType=Branded&pageSize=5`;
+      const res = await fetch(url, { signal });
+      if (!res.ok) continue;
+      const json = await res.json();
+      const hit = (json.foods ?? []).find((f: any) => String(f.gtinUpc ?? '').replace(/^0+/, '') === v.replace(/^0+/, ''));
+      if (hit) return fromUsda(hit);
+    } catch (e: any) { if (e?.name === 'AbortError') throw e; }
+  }
+  return null;
+}
+
 /** Everyday foods from the built-in list, instantly and without using the internet */
 export function commonResults(query: string): FoodResult[] {
   return matchCommon(query).map((f) => ({ id: `common-${f.name}`, name: f.name, source: 'common' as const, generic: true, per100: f.per100, servings: baseServings(f.servings) }));
@@ -179,7 +207,8 @@ export function fromRecent(item: FoodItem): FoodResult {
     id: `recent-${item.name}-${item.serving}`,
     name: item.name, brand: item.brand, source: 'usda',
     per100: { kcal: item.kcal * scale, protein: item.protein * scale, carbs: item.carbs * scale, fat: item.fat * scale },
-    servings: baseServings([{ label: item.serving, grams: item.grams }]),
+    // Quick adds have no weight: treat the whole entry as one 100 g "serving" so the numbers stay right
+    servings: item.grams > 0 ? baseServings([{ label: item.serving, grams: item.grams }]) : [{ label: '1 serving', grams: g / item.qty }],
   };
 }
 

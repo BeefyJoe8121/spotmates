@@ -31,6 +31,14 @@
           "photosPermission": "Spot Mates lets you pick meal and workout photos from your library.",
           "cameraPermission": "Spot Mates uses your camera so you can snap your meals and workouts."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Spot Mates uses the camera to scan food barcodes.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
       ]
     ],
     "experiments": {

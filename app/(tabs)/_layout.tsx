@@ -2,7 +2,7 @@ import { router, Tabs } from 'expo-router';
 import React from 'react';
 import { Pressable, Text } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { StreakBadge } from '@/components/StreakBadge';
+import { StreakBadge, StreakWatcher } from '@/components/StreakBadge';
 import { F, useTheme } from '@/lib/theme';
 
 function LogButton({ kind }: { kind: 'meal' | 'workout' }) {
@@ -32,6 +32,8 @@ const icon = (name: string) => ({ color, size }: { color: string; size: number }
 export default function TabsLayout() {
   const c = useTheme();
   return (
+    <>
+    <StreakWatcher />
     <Tabs screenOptions={{
       headerStyle: { backgroundColor: c.surface }, headerTintColor: c.ink, headerShadowVisible: false,
       headerLeft: () => <StreakBadge />, headerTitleAlign: 'center',
@@ -47,5 +49,6 @@ export default function TabsLayout() {
       <Tabs.Screen name="friends" options={{ title: 'Friends', tabBarIcon: icon('friends') }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: icon('settings') }} />
     </Tabs>
+    </>
   );
 }

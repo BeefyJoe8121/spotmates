@@ -1,7 +1,9 @@
 import { decode } from 'base64-arraybuffer';
+import { AppState } from 'react-native';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { FoodItem } from './foods';
+import { computeStreak, StreakInfo } from './streak';
 import { supabase } from './supabase';
 import { addDays, ageMs, POST_TTL_MS, today, uuid } from './util';
 
@@ -21,6 +23,7 @@ export type Profile = {
   kcal_goal: number | null; macro_mode: 'pct' | 'g'; pct_p: number | null; pct_c: number | null; pct_f: number | null;
   protein_goal: number | null; carb_goal: number | null; fat_goal: number | null; water_goal: number; workout_goal: number;
 };
+export type SavedMeal = { id: string; name: string; foods: FoodItem[]; created_at: string };
 export type Crew = { id: string; name: string; code: string };
 export type Comment = { id: string; post_id: string; author: string; body: string; created_at: string };
 export type Prop = { post_id: string; user_id: string };
@@ -29,7 +32,9 @@ export type WaterDay = { oz: number; entries: { oz: number; t: number }[] };
 type Ctx = {
   session: Session | null; ready: boolean; uid: string | null;
   profile: Profile | null; crew: Crew | null; members: Record<string, Profile>;
-  posts: Post[]; prs: Post[]; props: Prop[]; comments: Comment[]; water: WaterDay; loading: boolean;
+  posts: Post[]; prs: Post[]; props: Prop[];
+  /** Days I logged anything (last ~400 days) and my streak */
+  loggedDays: Set<string>; streak: StreakInfo; comments: Comment[]; water: WaterDay; loading: boolean;
   refresh: () => Promise<void>;
   nameOf: (id: string) => string;
   saveProfile: (patch: Partial<Profile>) => Promise<string | null>;
@@ -41,6 +46,11 @@ type Ctx = {
   addComment: (postId: string, body: string) => Promise<string | null>;
   deleteComment: (id: string) => Promise<void>;
   addWater: (oz: number) => Promise<void>;
+  /** Log a copy of a meal (foods and macros, no photo) on another day */
+  copyMeal: (p: Post, day: string) => Promise<string | null>;
+  savedMeals: SavedMeal[];
+  saveMeal: (name: string, foods: FoodItem[]) => Promise<string | null>;
+  deleteSavedMeal: (id: string) => Promise<void>;
   undoWater: () => Promise<void>;
 };
 
@@ -61,6 +71,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [members, setMembers] = useState<Record<string, Profile>>({});
   const [posts, setPosts] = useState<Post[]>([]);
   const [prs, setPrs] = useState<Post[]>([]);
+  const [myDays, setMyDays] = useState<string[]>([]);
+  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [props, setProps] = useState<Prop[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [water, setWater] = useState<WaterDay>({ oz: 0, entries: [] });
@@ -88,13 +100,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const loadFeed = useCallback(async (crewId: string | null) => {
     if (!uid) return;
     const since = addDays(today(), -60);
-    const [{ data: ps }, { data: pr0 }, { data: ms }, { data: w }] = await Promise.all([
+    const [{ data: ps }, { data: pr0 }, { data: ms }, { data: w }, { data: md }, { data: sm }] = await Promise.all([
       crewId ? supabase.from('posts').select('*').eq('crew_id', crewId).neq('kind', 'pr').gte('day', since).order('created_at', { ascending: false }).limit(500) : Promise.resolve({ data: [] as Post[] }),
       // PRs: all of them, so "+10 lb over your last PR" works across months
       crewId ? supabase.from('posts').select('*').eq('crew_id', crewId).eq('kind', 'pr').order('day', { ascending: false }).limit(1000) : Promise.resolve({ data: [] as Post[] }),
       crewId ? supabase.from('profiles').select('*').eq('crew_id', crewId) : Promise.resolve({ data: [] as Profile[] }),
       supabase.from('water').select('oz,entries').eq('user_id', uid).eq('day', today()).maybeSingle(),
+      supabase.from('posts').select('day').eq('author', uid).gte('day', addDays(today(), -400)).limit(5000),
+      supabase.from('saved_meals').select('id,name,foods,created_at').eq('user_id', uid).order('name').limit(200),
     ]);
+    setMyDays(((md as any[]) ?? []).map((r) => r.day));
+    setSavedMeals((sm as SavedMeal[]) ?? []);
     const list = (ps as Post[]) ?? [];
     const prList = (pr0 as Post[]) ?? [];
     setPosts(list);
@@ -148,10 +164,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     })().catch(() => {});
   }, [uid, posts, crew, loadFeed]);
 
+  const loggedDays = useMemo(() => {
+    const set = new Set(myDays);
+    posts.forEach((p) => { if (p.author === uid) set.add(p.day); });
+    prs.forEach((p) => { if (p.author === uid) set.add(p.day); });
+    return set;
+  }, [myDays, posts, prs, uid]);
+  // Recheck when the app comes back (a new day may have started)
+  const [dayKey, setDayKey] = useState(today());
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active') setDayKey(today()); });
+    return () => sub.remove();
+  }, []);
+  const streak = useMemo(() => computeStreak(loggedDays, dayKey), [loggedDays, dayKey]);
+
   const nameOf = useCallback((id: string) => members[id]?.display_name || (id === uid ? 'You' : 'Teammate'), [members, uid]);
 
-  const value = useMemo<Ctx>(() => ({
-    session, ready, uid, profile, crew, members, posts, prs, props, comments, water, loading, refresh, nameOf,
+  const value: Ctx = useMemo<Ctx>(() => ({
+    session, ready, uid, profile, crew, members, posts, prs, loggedDays, streak, props, comments, water, loading, refresh, nameOf,
 
     async saveProfile(patch) {
       if (!uid) return 'Sign in first.';
@@ -216,6 +246,27 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setComments((cur) => cur.filter((c) => c.id !== id));
       await supabase.from('comments').delete().eq('id', id);
     },
+    async copyMeal(p, day) {
+      return value.addPost({
+        kind: 'meal', day, title: p.title, meal_type: p.meal_type, place: p.place, notes: null, exercises: [],
+        kcal: p.kcal, protein: p.protein, carbs: p.carbs, fat: p.fat, foods: p.foods ?? [],
+      });
+    },
+    savedMeals,
+    async saveMeal(name, foods) {
+      if (!uid) return 'Sign in first.';
+      const n = name.trim().slice(0, 60);
+      if (!n) return 'Give the meal a name.';
+      if (!foods.length) return 'Add some foods first.';
+      const { data, error } = await supabase.from('saved_meals').insert({ user_id: uid, name: n, foods }).select('id,name,foods,created_at').single();
+      if (error) return /saved_meals|schema cache|does not exist/.test(error.message ?? '') ? 'Saved meals need a one-time database update. Ask Declan to run the saved meals update in Supabase.' : errMsg(error);
+      setSavedMeals((cur) => [...cur, data as SavedMeal].sort((a, b) => a.name.localeCompare(b.name)));
+      return null;
+    },
+    async deleteSavedMeal(id) {
+      setSavedMeals((cur) => cur.filter((m) => m.id !== id));
+      await supabase.from('saved_meals').delete().eq('id', id);
+    },
     async addWater(oz) {
       if (!uid || !(oz > 0)) return;
       const entries = [...water.entries, { oz: Math.round(oz), t: Date.now() }].slice(-80);
@@ -230,7 +281,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setWater({ oz: total, entries });
       await supabase.from('water').upsert({ user_id: uid, day: today(), oz: total, entries });
     },
-  }), [session, ready, uid, profile, crew, members, posts, prs, props, comments, water, loading, refresh, nameOf, loadProfile, loadFeed]);
+  }), [session, ready, uid, profile, crew, members, posts, prs, loggedDays, streak, savedMeals, props, comments, water, loading, refresh, nameOf, loadProfile, loadFeed]);
 
   return <DataCtx.Provider value={value}>{children}</DataCtx.Provider>;
 }

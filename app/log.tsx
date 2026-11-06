@@ -20,7 +20,10 @@ function guessMeal(): (typeof MEAL_TYPES)[number] {
 export default function LogScreen() {
   const c = useTheme();
   const params = useLocalSearchParams<{ kind?: string; meal?: string; search?: string }>();
-  const { addPost } = useData();
+  const { addPost, saveMeal } = useData();
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [kind, setKind] = useState<'meal' | 'workout'>(params.kind === 'workout' ? 'workout' : 'meal');
   const [photo, setPhoto] = useState<{ uri: string; base64: string } | null>(null);
   const [title, setTitle] = useState('');
@@ -147,7 +150,20 @@ export default function LogScreen() {
               ))}
             </View>
           ) : <T muted size={13}>Search a food database and pick serving sizes, like MyFitnessPal. Or just type the macros below.</T>}
-          <Btn small kind="primary" title="+ Add food" onPress={() => router.push('/food')} style={{ alignSelf: 'flex-start' }} />
+          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+            <Btn small kind="primary" title="+ Add food" onPress={() => router.push('/food')} />
+            {foods.length ? <Btn small title={saveOpen ? 'Cancel' : 'Save as a meal'} onPress={() => { setSaveOpen(!saveOpen); setSaveName(title); setSaveMsg(null); }} /> : null}
+          </View>
+          {saveOpen && foods.length ? (
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <Field value={saveName} onChangeText={setSaveName} placeholder="Name it, like Usual breakfast" maxLength={60} accessibilityLabel="Saved meal name" />
+              <Btn small kind="primary" title="Save" onPress={async () => {
+                const e = await saveMeal(saveName, foods);
+                if (e) setSaveMsg(e); else { setSaveOpen(false); setSaveMsg(`Saved. Find "${saveName.trim()}" under Saved meals when you add food.`); }
+              }} />
+            </View>
+          ) : null}
+          {saveMsg ? <T muted size={12}>{saveMsg}</T> : null}
         </View>
         ) : null}
         <View style={{ gap: 6 }}>

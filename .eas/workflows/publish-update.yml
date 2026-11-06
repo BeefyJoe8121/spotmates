@@ -10,6 +10,8 @@ jobs:
   publish:
     name: Publish to Expo Go
     type: update
+    # EXPO_PUBLIC_* values (like the USDA key) come from expo.dev → Environment variables → preview
+    environment: preview
     params:
       branch: preview
       message: ${{ github.commit_message || 'Spot Mates update' }}

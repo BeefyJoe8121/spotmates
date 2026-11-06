@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Btn, Field, H, Label, T } from '@/components/ui';
 import { useData } from '@/lib/data';
 import { commonResults, FoodItem, FoodResult, foodBus, fromRecent, macrosFor, searchFoods } from '@/lib/foods';
@@ -10,7 +11,7 @@ import { fmt, num } from '@/lib/util';
 
 export default function FoodScreen() {
   const c = useTheme();
-  const { posts, uid } = useData();
+  const { posts, uid, savedMeals, deleteSavedMeal } = useData();
   const [q, setQ] = useState('');
   const [results, setResults] = useState<FoodResult[]>([]);
   const [note, setNote] = useState<string | null>(null);
@@ -18,6 +19,9 @@ export default function FoodScreen() {
   const [err, setErr] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [picked, setPicked] = useState<FoodResult | null>(null);
+  const [scan, setScan] = useState(false);
+  const [quick, setQuick] = useState(false);
+  const [armDel, setArmDel] = useState<string | null>(null);
   const ctl = useRef<AbortController | null>(null);
 
   // Foods I've logged before, newest first, like MyFitnessPal's "Recent"
@@ -56,6 +60,10 @@ export default function FoodScreen() {
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (picked) return <FoodDetail food={picked} onBack={() => setPicked(null)} />;
+  if (scan) return <BarcodeScanner onFound={(f) => { setScan(false); setPicked(f); }} onClose={() => setScan(false)} />;
+  if (quick) return <QuickAdd onBack={() => setQuick(false)} />;
+
+  const addSaved = (foods: FoodItem[]) => { foods.forEach((f) => foodBus.emit(f)); router.back(); };
 
   const row = (f: FoodResult, sub?: string) => {
     const s = f.servings[0];
@@ -81,6 +89,10 @@ export default function FoodScreen() {
           placeholder="Search for a food" placeholderTextColor={c.muted} accessibilityLabel="Search for a food"
           style={{ backgroundColor: c.bg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 16, color: c.ink, fontFamily: F.body, borderWidth: 1, borderColor: c.line }}
         />
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+          <Btn small title="▦  Scan barcode" onPress={() => setScan(true)} style={{ flex: 1 }} />
+          <Btn small title="+  Quick add" onPress={() => setQuick(true)} style={{ flex: 1 }} />
+        </View>
       </View>
       {q.trim().length >= 2 ? (
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 40 }}>
@@ -100,7 +112,29 @@ export default function FoodScreen() {
           {results.map((f) => row(f))}
         </ScrollView>
       ) : (
-        <ScrollView keyboardShouldPersistTaps="handled">
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 40 }}>
+          {savedMeals.length ? (
+            <>
+              <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}><Label>Saved meals</Label></View>
+              {savedMeals.map((m) => {
+                const kcal = m.foods.reduce((a, f) => a + (f.kcal || 0), 0);
+                return (
+                  <Pressable key={m.id} onPress={() => addSaved(m.foods)} accessibilityRole="button" accessibilityLabel={`Add saved meal ${m.name}`}
+                    style={({ pressed }) => ({ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: c.line, backgroundColor: pressed ? c.sunk : c.surface, flexDirection: 'row', alignItems: 'center', gap: 10 })}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <T bold size={15} numberOfLines={1}>{m.name}</T>
+                      <T muted size={13} numberOfLines={1}>{m.foods.map((f) => f.name).join(', ')}</T>
+                    </View>
+                    <T mono bold size={15}>{fmt(kcal)}<T mono muted size={12}> cal</T></T>
+                    <Pressable hitSlop={8} accessibilityLabel={`Delete saved meal ${m.name}`}
+                      onPress={() => { if (armDel === m.id) { deleteSavedMeal(m.id); setArmDel(null); } else { setArmDel(m.id); setTimeout(() => setArmDel(null), 3000); } }}>
+                      <T size={13} bold={armDel === m.id} style={{ color: armDel === m.id ? c.danger : c.muted }}>{armDel === m.id ? 'Delete?' : '✕'}</T>
+                    </Pressable>
+                  </Pressable>
+                );
+              })}
+            </>
+          ) : null}
           <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}><Label>{recent.length ? 'Recent foods' : 'Search tips'}</Label></View>
           {recent.length ? recent.map((f) => row(fromRecent(f), `${f.serving}${f.qty !== 1 ? ` × ${f.qty}` : ''}`)) : (
             <T muted style={{ paddingHorizontal: 16 }}>Type a food like "chicken breast", "banana" or "Chick-fil-A nuggets". Tap a result to pick the serving size.</T>
@@ -108,6 +142,37 @@ export default function FoodScreen() {
         </ScrollView>
       )}
     </KeyboardAvoidingView>
+  );
+}
+
+/** Just the numbers, like MyFitnessPal's Quick Add */
+function QuickAdd({ onBack }: { onBack: () => void }) {
+  const c = useTheme();
+  const [name, setName] = useState('');
+  const [kcal, setKcal] = useState('');
+  const [p, setP] = useState(''); const [cb, setCb] = useState(''); const [f, setF] = useState('');
+  const k = num(kcal), pp = num(p) ?? 0, cc = num(cb) ?? 0, ff = num(f) ?? 0;
+  const est = Math.round(pp * 4 + cc * 4 + ff * 9);
+  const total = k ?? (est || null);
+  function add() {
+    if (!total || total <= 0) return;
+    foodBus.emit({ name: name.trim() || 'Quick add', serving: 'Quick add', grams: 0, qty: 1, kcal: Math.round(total), protein: pp, carbs: cc, fat: ff });
+    router.back();
+  }
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
+      <Pressable onPress={onBack} accessibilityRole="button"><T bold style={{ color: c.accent }}>‹ Back to search</T></Pressable>
+      <H size={26}>Quick add</H>
+      <T muted size={13}>For when you just know the numbers. Calories are filled in from the macros if you leave them blank.</T>
+      <Field label="Name (optional)" value={name} onChangeText={setName} placeholder="Dining hall pasta" maxLength={60} />
+      <Field label="Calories" value={kcal} onChangeText={setKcal} keyboardType="number-pad" placeholder={est ? String(est) : '500'} autoFocus />
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Field label="Protein (g)" value={p} onChangeText={setP} keyboardType="decimal-pad" />
+        <Field label="Carbs (g)" value={cb} onChangeText={setCb} keyboardType="decimal-pad" />
+        <Field label="Fat (g)" value={f} onChangeText={setF} keyboardType="decimal-pad" />
+      </View>
+      <Btn kind="primary" title={total ? `Add to meal · ${fmt(total)} cal` : 'Add to meal'} disabled={!total} onPress={add} />
+    </ScrollView>
   );
 }
 

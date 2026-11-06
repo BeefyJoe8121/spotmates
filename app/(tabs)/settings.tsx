@@ -170,7 +170,9 @@ function AppearanceCard() {
 
 function StreakCard() {
   const c = useTheme();
-  const { prefs, setPref, streak } = useAppPrefs();
+  const { prefs, setPref } = useAppPrefs();
+  const { streak: st } = useData();
+  const streak = st.n;
   const cur = tierFor(streak);
   return (
     <Card>
@@ -178,7 +180,7 @@ function StreakCard() {
         <StreakIcon n={streak} size={30} />
         <View style={{ flex: 1 }}>
           <H size={22}>Streak: {streak} day{streak === 1 ? '' : 's'}</H>
-          <T muted size={13}>Days in a row you've opened Spot Mates</T>
+          <T muted size={13}>Days in a row you've logged a meal, workout or PR. You get one rest day a week{st.restLeft ? ' (still available this week)' : ' (used this week)'}.</T>
         </View>
       </View>
       <View style={{ gap: 6 }}>

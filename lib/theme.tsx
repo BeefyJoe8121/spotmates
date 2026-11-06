@@ -1,6 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Alert, AppState, Platform, useColorScheme } from 'react-native';
-import { addDays, today } from './util';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { Platform, useColorScheme } from 'react-native';
 
 // ---------- Palettes ----------
 const light = {
@@ -56,7 +55,7 @@ function buildPalette(isDark: boolean, schemeId: string): Palette {
   };
 }
 
-// ---------- Streak (days in a row you opened the app) ----------
+// ---------- Streak flame colors (the streak itself is in lib/streak.ts) ----------
 export type Tier = { at: number; name: string; c: string[]; core: string };
 /** Flame color by streak milestone. To add a milestone, add a row (at = days in a row). */
 export const TIERS: Tier[] = [
@@ -84,7 +83,6 @@ const store = {
 
 type Ctx = {
   palette: Palette; isDark: boolean; prefs: Prefs; setPref: <K extends keyof Prefs>(k: K, v: Prefs[K]) => void;
-  streak: number;
 };
 const ThemeCtx = createContext<Ctx | null>(null);
 
@@ -95,36 +93,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     scheme: store.get('scheme', 'auto'),
     streakIcon: store.get('streakicon', 'holiday') as Prefs['streakIcon'],
   }));
-  const [streak, setStreak] = useState(0);
   const setPref = useCallback(<K extends keyof Prefs>(k: K, v: Prefs[K]) => {
     store.set(k === 'streakIcon' ? 'streakicon' : k, String(v));
     setPrefs((p) => ({ ...p, [k]: v }));
   }, []);
 
-  // Count today as a visit; streak = consecutive days ending today
-  useEffect(() => {
-    const visit = () => {
-      let days: string[] = [];
-      try { days = JSON.parse(store.get('visits', '[]')); } catch {}
-      const t = today();
-      const fresh = !days.includes(t);
-      if (fresh) { days = [...days, t].sort().slice(-400); store.set('visits', JSON.stringify(days)); }
-      const set = new Set(days); let n = 0, d = t;
-      while (set.has(d)) { n++; d = addDays(d, -1); }
-      setStreak(n);
-      const tier = TIERS[tierFor(n)];
-      if (fresh && n > 1 && tier.at === n) {
-        setTimeout(() => Alert.alert(`${tier.name} streak! 🔥`, `You've opened Spot Mates ${n} days in a row. Your flame just changed color.`), 800);
-      }
-    };
-    visit();
-    const sub = AppState.addEventListener('change', (s) => { if (s === 'active') visit(); });
-    return () => sub.remove();
-  }, []);
-
   const isDark = prefs.mode === 'system' ? system === 'dark' : prefs.mode === 'dark';
   const palette = useMemo(() => buildPalette(isDark, prefs.scheme), [isDark, prefs.scheme]);
-  const value = useMemo(() => ({ palette, isDark, prefs, setPref, streak }), [palette, isDark, prefs, setPref, streak]);
+  const value = useMemo(() => ({ palette, isDark, prefs, setPref }), [palette, isDark, prefs, setPref]);
   return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>;
 }
 

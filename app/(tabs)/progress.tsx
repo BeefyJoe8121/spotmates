@@ -6,7 +6,7 @@ import { useData } from '@/lib/data';
 import { INTENSITY, PACES, SavedPlan, WG, wgCalc, wgFrom } from '@/lib/goalWeight';
 import { e1rm, prevBest, prLbs, prReps, prScore, TROPHY } from '@/lib/prs';
 import { supabase } from '@/lib/supabase';
-import { F, useAppPrefs, useTheme } from '@/lib/theme';
+import { F, useTheme } from '@/lib/theme';
 import { addDays, dayLabel, dayStr, fmt, MON, num, parseDay, pctToGrams, shortDay, today, weekStart } from '@/lib/util';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -16,8 +16,8 @@ const missingTable = (e: any) => !!e && (/does not exist|Could not find the tabl
 /** Progress is personal: only your own calendar, workouts, weigh-ins and goal */
 export default function ProgressScreen() {
   const c = useTheme();
-  const { uid, posts, prs, profile, refresh, loading } = useData();
-  const { streak } = useAppPrefs();
+  const { uid, posts, prs, profile, refresh, loading, streak: st } = useData();
+  const streak = st.n;
   const [days, setDays] = useState<{ day: string; kind: string }[]>([]);
   const [weights, setWeights] = useState<Weigh[]>([]);
   const [plan, setPlan] = useState<SavedPlan | null>(null);
@@ -89,7 +89,7 @@ export default function ProgressScreen() {
             <Stat value={`${mCount}`} label="Meals logged" />
             <Stat value={`${streak}`} label="Day streak" />
           </View>
-          <MonthCal workoutDays={workoutDays} mealDays={mealDays} prs={myPrs} allPrs={prs} />
+          <MonthCal workoutDays={workoutDays} mealDays={mealDays} prs={myPrs} allPrs={prs} rest={st.rest} />
         </Card>
 
         <WeeksChart workoutDays={workoutDays} goal={goalW} />
@@ -130,7 +130,7 @@ function Nav({ label, off, setOff }: { label: string; off: number; setOff: (n: n
 }
 
 // ---------- Month calendar ----------
-function MonthCal({ workoutDays, mealDays, prs, allPrs }: { workoutDays: Set<string>; mealDays: Set<string>; prs: ReturnType<typeof useData>['prs']; allPrs: ReturnType<typeof useData>['prs'] }) {
+function MonthCal({ workoutDays, mealDays, prs, allPrs, rest }: { rest: Set<string>; workoutDays: Set<string>; mealDays: Set<string>; prs: ReturnType<typeof useData>['prs']; allPrs: ReturnType<typeof useData>['prs'] }) {
   const c = useTheme();
   const [off, setOff] = useState(0);
   const [pick, setPick] = useState<string | null>(null);
@@ -152,9 +152,9 @@ function MonthCal({ workoutDays, mealDays, prs, allPrs }: { workoutDays: Set<str
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
         {Array.from({ length: rows * 7 }, (_, i) => {
           const d = addDays(start, i), dt = parseDay(d);
-          const out = dt.getMonth() !== m, w = workoutDays.has(d), ml = mealDays.has(d), pr = prDays.has(d), isToday = d === t;
+          const out = dt.getMonth() !== m, rs = rest.has(d), w = workoutDays.has(d), ml = mealDays.has(d), pr = prDays.has(d), isToday = d === t;
           const cell = (
-            <View style={{ flex: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: w ? c.protein : c.sunk, opacity: out ? 0.35 : d > t ? 0.55 : 1, borderWidth: isToday ? 2 : pick === d ? 2 : 0, borderColor: pick === d ? c.gold : c.ink }}>
+            <View style={{ flex: 1, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: w ? c.protein : c.sunk, opacity: out ? 0.35 : d > t ? 0.55 : 1, borderWidth: isToday || pick === d ? 2 : rs ? 1.5 : 0, borderColor: pick === d ? c.gold : rs && !isToday ? c.muted : c.ink, borderStyle: rs && !isToday && pick !== d ? 'dashed' : 'solid' }}>
               <T size={13} bold={isToday} style={{ color: w ? c.surface : c.ink }}>{dt.getDate()}</T>
               {ml ? <View style={{ position: 'absolute', bottom: 4, width: 5, height: 5, borderRadius: 3, backgroundColor: w ? c.surface : c.meal }} /> : null}
               {pr ? <View style={{ position: 'absolute', top: 2, right: 2 }}><SvgXml xml={TROPHY} width={12} height={12} /></View> : null}
@@ -189,6 +189,7 @@ function MonthCal({ workoutDays, mealDays, prs, allPrs }: { workoutDays: Set<str
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
         <Legend color={c.protein} label="Workout day" />
         <Legend color={c.meal} label="Meal logged" round />
+        <Legend color={c.muted} label="Rest day" dashed />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><SvgXml xml={TROPHY} width={12} height={12} /><T muted size={12}>PR (tap it)</T></View>
       </View>
     </View>

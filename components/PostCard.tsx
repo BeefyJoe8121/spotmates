@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Alert, Image, Pressable, Text, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { Post, useData } from '@/lib/data';
 import { photoUrl } from '@/lib/supabase';
 import { prevBest, prLbs, prReps, prScore, TROPHY } from '@/lib/prs';
 import { F, useTheme } from '@/lib/theme';
-import { ageMs, dayLabel, fmt, macroKcal, num, POST_TTL_MS, relTime, timeOf, ttlText } from '@/lib/util';
+import { ageMs, dayLabel, fmt, today, macroKcal, num, POST_TTL_MS, relTime, timeOf, ttlText } from '@/lib/util';
 import { Btn, Field, T } from './ui';
 
 export function PostCard({ post }: { post: Post }) {
   const c = useTheme();
-  const { uid, nameOf, props, comments, toggleProp, deletePost, prs } = useData();
+  const { uid, nameOf, props, comments, toggleProp, deletePost, prs, copyMeal } = useData();
+  const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [armDelete, setArmDelete] = useState(false);
@@ -39,6 +40,10 @@ export function PostCard({ post }: { post: Post }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: c.line, paddingTop: 10 }}>
         <Pill title={`Props ${propCount}`} on={gave} disabled={mine} onPress={() => toggleProp(post)} />
         <Pill title={thread.length ? `Comments ${thread.length}` : 'Comment'} on={showComments} onPress={() => setShowComments(!showComments)} />
+        {mine && meal ? <Pill title={copied ? 'Logged ✓' : 'Log again'} disabled={copied} onPress={async () => {
+          const e = await copyMeal(post, today());
+          if (e) Alert.alert("Couldn't log it", e); else setCopied(true);
+        }} /> : null}
         {mine ? (
           <Pressable style={{ marginLeft: 'auto', padding: 4 }} accessibilityRole="button"
             onPress={() => { if (armDelete) deletePost(post); else { setArmDelete(true); setTimeout(() => setArmDelete(false), 3500); } }}>
